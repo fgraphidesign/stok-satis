@@ -1,0 +1,167 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#172b4d">
+<title>Stok & Satış Yönetimi</title>
+<link rel="stylesheet" href="./css/style.css">
+</head>
+<body>
+
+<section id="authScreen" class="auth-screen">
+  <div class="auth-card">
+    <h1>Stok &amp; Satış Yönetimi</h1>
+    <p class="muted">Telefon ve bilgisayardan aynı verilere erişmek için giriş yapın.</p>
+    <div id="setupBox" style="display:none">
+      <h3>Kurulum eksik</h3>
+      <p class="muted"><b>js/firebase-config.js</b> dosyasındaki Firebase bilgileri henüz doldurulmamış. README.md içindeki "Firebase kurulumu" adımlarını tamamlayıp dosyayı kaydedin ve sayfayı yenileyin.</p>
+    </div>
+    <form id="loginBox" style="display:none" onsubmit="login(event)">
+      <h3>Giriş</h3>
+      <label for="loginEmail">E-posta</label><input id="loginEmail" type="email" autocomplete="username" required>
+      <label for="loginPassword" style="margin-top:10px">Şifre</label><input id="loginPassword" type="password" autocomplete="current-password" required>
+      <button type="submit" id="loginBtn" style="margin-top:12px;width:100%">Giriş Yap</button>
+      <button type="button" class="link" onclick="resetPassword()">Şifremi unuttum</button>
+      <div class="divider"><span>veya</span></div>
+      <button type="button" id="githubBtn" class="github" onclick="loginGithub()">GitHub ile giriş yap</button>
+    </form>
+    <div id="authMessage" role="status" style="margin-top:12px"></div>
+  </div>
+</section>
+<div id="appShell" style="display:none">
+
+<header>
+  <div><h1>Stok & Satış Yönetimi</h1><small>Firebase bulut bağlantılı uygulama</small><div id="syncStatus" class="sync-indicator">Bağlantı bekleniyor…</div></div>
+  <div class="no-print actions"><span id="userInfo" class="user-info"></span><button class="secondary" onclick="backup()">Yedek Al</button><button class="secondary" onclick="logout()">Çıkış</button></div>
+</header>
+<nav class="no-print" id="nav">
+<button data-tab="dashboard" class="active">Özet</button>
+<button data-tab="products">Ürünler / Stok</button>
+<button data-tab="sales">Satış Girişi</button>
+<button data-tab="expenses">Giderler</button>
+<button data-tab="reports">Raporlar</button>
+<button data-tab="backup">Yedekleme</button>
+</nav>
+<main>
+<section id="dashboard" class="tab active">
+<h2>Genel Özet</h2>
+<div class="grid">
+<div class="card kpi"><div class="label">Toplam stok (adet)</div><div class="value" id="kStock">0</div></div>
+<div class="card kpi"><div class="label">Stok maliyeti</div><div class="value" id="kCost">₺0,00</div></div>
+<div class="card kpi"><div class="label">Toplam satış</div><div class="value" id="kSales">₺0,00</div></div>
+<div class="card kpi"><div class="label">Brüt kâr</div><div class="value" id="kProfit">₺0,00</div></div>
+</div>
+<div class="grid2" style="margin-top:14px">
+<div class="card"><h3>Son satışlar</h3><div id="dashSales"></div></div>
+<div class="card"><h3>Kritik stoklar</h3><div id="dashStock"></div></div>
+</div>
+</section>
+
+<section id="products" class="tab">
+<div class="report-head"><h2>Ürünler ve Stok</h2><button onclick="newProduct()">+ Yeni Ürün</button></div>
+<div class="card" id="productForm" style="display:none;margin-bottom:14px">
+<h3>Ürün Bilgileri</h3>
+<div class="formgrid">
+<div><label>Ürün adı</label><input id="pName"></div>
+<div><label>Stok kodu</label><input id="pSku"></div>
+<div><label>Kategori</label><input id="pCat"></div>
+<div><label>Tedarikçi</label><input id="pSupplier"></div>
+<div><label>Geliş fiyatı / adet</label><input id="pBuy" type="number" step="0.01" min="0"></div>
+<div><label>Geliş fiyatı / koli</label><input id="pBuyCase" type="number" step="0.01" min="0"></div>
+<div><label>Toptan satış / adet</label><input id="pWhole" type="number" step="0.01" min="0"></div>
+<div><label>Perakende satış / adet</label><input id="pRetail" type="number" step="0.01" min="0"></div>
+<div><label>Koli içi adet</label><input id="pCaseQty" type="number" step="1" min="1" value="1"></div>
+<div><label>Mevcut stok / adet</label><input id="pStock" type="number" step="1" min="0" value="0"></div>
+<div><label>Minimum stok / adet</label><input id="pMin" type="number" step="1" min="0" value="0"></div>
+<div class="wide"><label>Açıklama</label><input id="pNote"></div>
+</div>
+<input id="pId" type="hidden">
+<div class="actions" style="margin-top:12px"><button onclick="saveProduct()">Kaydet</button><button class="secondary" onclick="cancelProduct()">Vazgeç</button></div>
+</div>
+<div class="card">
+<div class="toolbar"><div style="min-width:260px"><label>Ürün ara</label><input id="productSearch" oninput="renderProducts()" placeholder="Ürün, kod, kategori..."></div></div>
+<div class="tablewrap"><table><thead><tr><th>Ürün</th><th>Stok Kodu</th><th>Alış / Adet</th><th>Alış / Koli</th><th>Toptan / Adet</th><th>Perakende / Adet</th><th>Koli İçeriği</th><th>Stok</th><th>Maliyet</th><th></th></tr></thead><tbody id="productRows"></tbody></table></div>
+</div>
+</section>
+
+<section id="sales" class="tab">
+<h2>Satış Girişi</h2>
+<div class="card" style="margin-bottom:14px">
+<div class="formgrid">
+<div><label>Tarih</label><input id="sDate" type="date"></div>
+<div><label>Ürün</label><select id="sProduct" onchange="syncSalePrice()"></select></div>
+<div><label>Satış türü</label><select id="sType" onchange="syncSalePrice()"><option value="wholesale">Toptan</option><option value="retail">Perakende</option></select></div>
+<div><label>Satış birimi</label><select id="sUnit" onchange="syncSalePrice()"><option value="unit">Adet</option><option value="case">Koli</option></select></div>
+<div><label>Miktar</label><input id="sQty" type="number" min="1" step="1" value="1"></div>
+<div><label>Birim satış fiyatı</label><input id="sPrice" type="number" min="0" step="0.01"></div>
+<div class="wide"><label>Açıklama</label><input id="sNote"></div>
+</div>
+<div style="margin-top:10px" class="muted" id="saleInfo"></div>
+<button style="margin-top:10px" onclick="saveSale()">Satışı Kaydet</button>
+</div>
+<div class="card">
+<h3>Satış Geçmişi</h3>
+<div class="toolbar"><div><label>Başlangıç</label><input id="sf" type="date" onchange="renderSales()"></div><div><label>Bitiş</label><input id="st" type="date" onchange="renderSales()"></div><div><label>Tür</label><select id="stypeFilter" onchange="renderSales()"><option value="">Tümü</option><option value="wholesale">Toptan</option><option value="retail">Perakende</option></select></div></div>
+<div class="tablewrap"><table><thead><tr><th>Tarih</th><th>Ürün</th><th>Tür</th><th>Miktar</th><th>Birim Fiyat</th><th>Satış</th><th>Maliyet</th><th>Kâr</th><th></th></tr></thead><tbody id="salesRows"></tbody></table></div>
+</div>
+</section>
+
+<section id="expenses" class="tab">
+<div class="report-head"><h2>Giderler</h2><button onclick="newExpense()">+ Gider Ekle</button></div>
+<div class="card" id="expenseForm" style="display:none;margin-bottom:14px">
+<div class="formgrid">
+<div><label>Tarih</label><input id="eDate" type="date"></div>
+<div><label>Gider türü</label><input id="eCat" placeholder="Kira, elektrik, kargo..."></div>
+<div><label>Tutar</label><input id="eAmount" type="number" min="0" step="0.01"></div>
+<div class="wide"><label>Açıklama</label><input id="eNote"></div>
+</div>
+<div class="actions" style="margin-top:10px"><button onclick="saveExpense()">Kaydet</button><button class="secondary" onclick="cancelExpense()">Vazgeç</button></div>
+</div>
+<div class="card"><div class="tablewrap"><table><thead><tr><th>Tarih</th><th>Tür</th><th>Açıklama</th><th class="num">Tutar</th><th></th></tr></thead><tbody id="expenseRows"></tbody></table></div></div>
+</section>
+
+<section id="reports" class="tab printable">
+<div class="report-head"><h2>Satış ve Kâr Raporu</h2><div class="no-print actions"><button onclick="printReport()">PDF / Yazdır</button><button class="secondary" onclick="exportExcel()">Excel İndir</button></div></div>
+<div class="card no-print" style="margin-bottom:12px">
+<div class="toolbar">
+<div><label>Başlangıç</label><input id="rf" type="date" onchange="renderReport()"></div>
+<div><label>Bitiş</label><input id="rt" type="date" onchange="renderReport()"></div>
+<button class="secondary" onclick="setPeriod('today')">Bugün</button>
+<button class="secondary" onclick="setPeriod('week')">Bu Hafta</button>
+<button class="secondary" onclick="setPeriod('month')">Bu Ay</button>
+<button class="secondary" onclick="setPeriod('all')">Tümü</button>
+</div>
+</div>
+<div class="report-cards">
+<div class="card"><span class="muted">Toplam satış</span><strong id="rSales">₺0</strong></div>
+<div class="card"><span class="muted">Toptan satış</span><strong id="rWholesale">₺0</strong></div>
+<div class="card"><span class="muted">Perakende satış</span><strong id="rRetail">₺0</strong></div>
+<div class="card"><span class="muted">Brüt kâr</span><strong id="rProfit">₺0</strong></div>
+<div class="card"><span class="muted">Giderler</span><strong id="rExpense">₺0</strong></div>
+</div>
+<div class="grid2">
+<div class="card"><h3>Toptan / Perakende Kâr Özeti</h3><div id="profitSummary"></div></div>
+<div class="card"><h3>Dönem Özeti</h3><div id="periodSummary"></div></div>
+</div>
+<div class="card" style="margin-top:12px"><h3>Satış Detayı</h3><div class="tablewrap"><table><thead><tr><th>Tarih</th><th>Ürün</th><th>Tür</th><th>Miktar</th><th>Satış</th><th>Maliyet</th><th>Brüt Kâr</th></tr></thead><tbody id="reportRows"></tbody></table></div></div>
+</section>
+
+<section id="backup" class="tab">
+<h2>Yedekleme ve Veri Aktarımı</h2>
+<div class="grid2">
+<div class="card"><h3>Manuel Yedek Al</h3><p class="muted">Tüm ürün, satış ve gider verileri tek bir JSON dosyasına kaydedilir.</p><button onclick="backup()">JSON Yedeği İndir</button></div>
+<div class="card"><h3>Yedekten Geri Yükle</h3><p class="muted">Daha önce alınmış JSON yedeğini seçin. Mevcut verilerin üzerine yazılır.</p><input id="restoreFile" type="file" accept=".json"><button style="margin-top:8px" onclick="restore()">Yedeği Yükle</button></div>
+</div>
+<div class="card" style="margin-top:14px"><h3>Veri durumu</h3><div id="dataInfo"></div></div>
+</section>
+</main>
+<footer>Veriler Firebase Firestore bulutunda hesabınıza özel saklanır. Yine de düzenli JSON yedeği alın.</footer>
+
+
+
+</div>
+
+<script type="module" src="./js/app.js"></script>
+</body>
+</html>
