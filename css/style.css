@@ -33,20 +33,4 @@ footer{text-align:center;color:var(--muted);padding:25px;font-size:12px}
  nav,header,.no-print,footer{display:none!important}body{background:white}.tab{display:none!important}.tab.printable{display:block!important}main{padding:0}.card{box-shadow:none;border:0}.tablewrap{max-height:none;overflow:visible}
 }
 
-
-.auth-screen{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px;background:#f4f6f8}
-.auth-card{width:min(100%,460px);background:#fff;border:1px solid #dfe3e8;border-radius:14px;padding:24px;box-shadow:0 8px 30px #0000000b}
-.auth-card h1{margin:0 0 8px;font-size:24px}.auth-card h3{margin-top:22px}.auth-card input{margin-top:4px}
-#authMessage{white-space:pre-wrap;color:#b42318;font-size:13px}
-.sync-indicator{font-size:12px;color:#dbeafe;margin-top:3px}
-
-/* Giriş ekranı (Firebase) */
-.auth-card form{margin:0}
-.auth-card button{font-size:14px}
-button.link{background:none;color:var(--primary);padding:10px 0 0;font-weight:500;font-size:13px;display:block;text-decoration:underline}
-.divider{display:flex;align-items:center;gap:10px;margin:14px 0;color:var(--muted);font-size:12px}
-.divider::before,.divider::after{content:"";flex:1;border-top:1px solid var(--line)}
-button.github{width:100%;background:#24292f;color:#fff}
-button:disabled{opacity:.6;cursor:wait}
-.user-info{font-size:12px;opacity:.8;align-self:center;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-header .actions{align-items:center}
+.auth-screen{min-height:100vh;display:grid;place-items:center;padding:20px}.auth-card{background:white;max-width:440px;width:100%;padding:28px;border:1px solid #dfe3e8;border-radius:12px}.link{background:transparent;color:#1f5eff}.divider{text-align:center;margin:12px}.github{width:100%;background:#17202a}.product-thumb{width:50px;height:50px;object-fit:contain;float:left;margin-right:8px}.image-preview{width:120px;height:120px;object-fit:contain;border:1px solid #dfe3e8}.stock-summary{margin:12px 0}.price-controls{margin-top:16px}button:disabled{opacity:.5;cursor:wait}
