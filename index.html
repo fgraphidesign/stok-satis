@@ -74,13 +74,15 @@
 <div><label>Koli içi adet</label><input id="pCaseQty" type="number" step="1" min="1" value="1"></div>
 <div><label>Mevcut stok / adet</label><input id="pStock" type="number" step="1" min="0" value="0"></div>
 <div><label>Minimum stok / adet</label><input id="pMin" type="number" step="1" min="0" value="0"></div>
+<div class="wide"><label for="pImage">Ürün görseli (JPEG, PNG, WebP)</label><input id="pImage" type="file" accept="image/jpeg,image/png,image/webp" onchange="selectImage(event)"><p class="muted">Görsel boyutu otomatik küçültülür.</p><img id="pImagePreview" class="image-preview" alt="Ürün görseli önizlemesi" hidden><button type="button" class="secondary" onclick="clearImage()">Görseli kaldır</button><span id="imageStatus" role="status"></span></div>
 <div class="wide"><label>Açıklama</label><input id="pNote"></div>
 </div>
 <input id="pId" type="hidden">
 <div class="actions" style="margin-top:12px"><button onclick="saveProduct()">Kaydet</button><button class="secondary" onclick="cancelProduct()">Vazgeç</button></div>
 </div>
 <div class="card">
-<div class="toolbar"><div style="min-width:260px"><label>Ürün ara</label><input id="productSearch" oninput="renderProducts()" placeholder="Ürün, kod, kategori..."></div></div>
+<h3>Detaylı Ürün / Stok Raporu</h3><div class="toolbar"><button onclick="printStockReport()">Stok Raporu PDF / Yazdır</button><button class="secondary" onclick="exportStockExcel()">Stok Raporu Excel (.xlsx)</button><div><label>Kategori</label><select id="stockCategory" onchange="renderProducts();renderStockReport()"><option value="">Tümü</option></select></div><div><label>Stok durumu</label><select id="stockFilter" onchange="renderProducts();renderStockReport()"><option value="">Tümü</option><option value="low">Kritik stok</option><option value="zero">Stok yok</option><option value="available">Stokta</option></select></div></div><div id="stockSummary" class="stock-summary"></div>
+<div class="toolbar"><div style="min-width:260px"><label>Ürün ara</label><input id="productSearch" oninput="renderProducts();renderStockReport()" placeholder="Ürün, kod, kategori..."></div></div>
 <div class="tablewrap"><table><thead><tr><th>Ürün</th><th>Stok Kodu</th><th>Alış / Adet</th><th>Alış / Koli</th><th>Toptan / Adet</th><th>Perakende / Adet</th><th>Koli İçeriği</th><th>Stok</th><th>Maliyet</th><th></th></tr></thead><tbody id="productRows"></tbody></table></div>
 </div>
 </section>
@@ -122,6 +124,7 @@
 </section>
 
 <section id="reports" class="tab printable">
+<div class="card no-print" style="margin-bottom:16px"><h3>Görselli Fiyat Listesi</h3><p class="muted">PDF çıktısında ürün görselleri 3 × 3 cm; adet ve koli fiyatları ayrı gösterilir. Yazdırma penceresinde “PDF olarak kaydet” seçin; ölçek %100 olmalıdır.</p><div class="toolbar"><div><label>Kategori</label><select id="priceCategory"><option value="">Tümü</option></select></div><div><label>Ürünler</label><select id="priceStock"><option value="all">Tüm ürünler</option><option value="available">Yalnızca stokta olanlar</option></select></div><button onclick="printPriceList('wholesale')">Toptan Fiyat Listesi PDF</button><button class="secondary" onclick="printPriceList('retail')">Perakende Fiyat Listesi PDF</button></div></div>
 <div class="report-head"><h2>Satış ve Kâr Raporu</h2><div class="no-print actions"><button onclick="printReport()">PDF / Yazdır</button><button class="secondary" onclick="exportExcel()">Excel İndir</button></div></div>
 <div class="card no-print" style="margin-bottom:12px">
 <div class="toolbar">
@@ -162,6 +165,9 @@
 
 </div>
 
+<script src="./js/xlsx.js"></script>
+<script src="./js/features.js"></script>
+<script src="./js/base.js"></script>
 <script type="module" src="./js/app.js"></script>
 </body>
 </html>
