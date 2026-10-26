@@ -62,6 +62,15 @@
 <div class="report-head"><h2>Ürünler ve Stok</h2><button onclick="newProduct()">+ Yeni Ürün</button></div>
 <div class="card" style="margin-bottom:14px"><h3>Excel ile Toplu Ürün Yükleme</h3><p class="muted">Bilgisayarınızdan Excel (.xlsx) dosyasını seçin. Önce ürün sayısı ve hatalar gösterilir; onaydan sonra mevcut ürünlere eklenir. Boş stok hücreleri boş kalır.</p>
 <div class="toolbar"><input id="bulkFile" type="file" accept=".xlsx,.xls" aria-label="Excel dosyası seçin" onchange="previewBulkImport()"><button id="bulkImportButton" onclick="importProducts()" disabled>Excel dosyası seçin</button></div><p id="bulkPreview" class="muted">Düzenlediğiniz Excel dosyasını bilgisayarınızdan seçin.</p></div>
+<div class="card no-print" style="margin-bottom:14px;border:1px solid #b64b4b">
+<h3>Toplu Ürün Silme</h3>
+<p class="muted">Bu işlem yalnızca ürün kayıtlarını siler. Satış veya gider kayıtları silinmez. Satış geçmişiyle ilişkili ürünler varsa güvenlik için işlem engellenir. İşlem geri alınamaz; önce JSON yedeği alın.</p>
+<p id="bulkDeleteInfo" class="muted">Ürünler kontrol ediliyor…</p>
+<label style="display:flex;align-items:center;gap:8px;margin:10px 0"><input id="bulkDeleteBackup" type="checkbox" style="width:auto" onchange="updateBulkDeleteButton()"> Güncel JSON yedeğimi indirdim.</label>
+<label>Onay için <b>TÜM ÜRÜNLERİ SİL</b> yazın</label>
+<input id="bulkDeleteConfirm" type="text" autocomplete="off" placeholder="TÜM ÜRÜNLERİ SİL" oninput="updateBulkDeleteButton()">
+<button id="bulkDeleteButton" type="button" style="margin-top:10px;background:#a12d2d;color:white" onclick="deleteAllProducts()" disabled>Tüm ürünleri sil</button>
+</div>
 <div class="card" id="productForm" style="display:none;margin-bottom:14px">
 <h3>Ürün Bilgileri</h3>
 <div class="formgrid">
@@ -170,6 +179,6 @@
 <script src="./js/xlsx.js"></script>
 <script src="./js/features.js"></script>
 <script src="./js/base.js"></script>
-<script type="module" src="./js/app.js?v=excel-20261026-2"></script>
+<script type="module" src="./js/app.js?v=bulk-delete-20261026-1"></script>
 </body>
 </html>
