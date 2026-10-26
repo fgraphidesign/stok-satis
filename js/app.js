@@ -36,35 +36,76 @@ function validateBackup(data){
 }
 async function restore(){const file=$('restoreFile').files[0];if(!file){alert('JSON yedek dosyası seçin.');return;}return action(async()=>{const restored=validateBackup(JSON.parse(await file.text()));const operations=[];for(const k of ['products','sales','expenses']){const targetIds=new Set(restored[k].map(x=>x.id));for(const row of db[k])if(!targetIds.has(row.id))operations.push(['delete',k,row.id]);for(const row of restored[k])operations.push(['set',k,row.id,withoutId(row)]);}if(operations.length>450)throw Error('Yedek tek işlem sınırını aşıyor. Veriler değiştirilmedi.');if(!confirm('Mevcut veriler yedekle değiştirilecek. Güncel yedeğinizi aldıysanız devam edin.'))return;const batch=api.writeBatch(store);for(const [op,k,id,data] of operations)if(op==='delete')batch.delete(ref(k,id));else batch.set(ref(k,id),data);await batch.commit();status('Yedek geri yüklendi.');});}
 let bulkPending=null;
+async function loadExcelParser(){
+ if(window.XLSX)return window.XLSX;
+ if(!window._xlsxLoader){
+  window._xlsxLoader=new Promise((resolve,reject)=>{
+   const script=document.createElement('script');
+   script.src='https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js';
+   script.onload=()=>window.XLSX?resolve(window.XLSX):reject(Error('Excel okuyucu yüklenemedi.'));
+   script.onerror=()=>reject(Error('Excel okuyucu internetten yüklenemedi. Bağlantınızı kontrol edin.'));
+   document.head.appendChild(script);
+  }).catch(e=>{window._xlsxLoader=null;throw e;});
+ }
+ return window._xlsxLoader;
+}
+function parseMoneyCell(value,label,row){
+ if(value===null||value===undefined||String(value).trim()==='')return 0;
+ if(typeof value==='number')return value;
+ let v=String(value).trim().replace(/\s/g,'').replace(/₺|TL|TRY/gi,'');
+ if(v.includes(',')&&v.includes('.'))v=v.lastIndexOf(',')>v.lastIndexOf('.')?v.replace(/\./g,'').replace(',','.'):v.replace(/,/g,'');
+ else if(v.includes(','))v=v.replace(',','.');
+ const n=Number(v);if(!Number.isFinite(n)||n<0)throw Error(`${row}. satır: ${label} geçersiz.`);return n;
+}
+function parseWholeCell(value,label,row,blank=null){
+ if(value===null||value===undefined||String(value).trim()==='')return blank;
+ const n=Number(value);if(!Number.isInteger(n)||n<0)throw Error(`${row}. satır: ${label} geçersiz.`);return n;
+}
 async function previewBulkImport(){
- bulkPending=null;$('bulkImportButton').disabled=true;
- const f=$('bulkFile').files[0];if(!f){$('bulkPreview').textContent='Dosya seçilmedi.';return;}
+ bulkPending=null;$('bulkImportButton').disabled=true;$('bulkImportButton').textContent='Excel dosyası seçin';
+ const f=$('bulkFile').files[0];if(!f){$('bulkPreview').textContent='Excel dosyası seçilmedi.';return;}
+ $('bulkPreview').textContent='Excel dosyası okunuyor…';
  try{
-  const payload=JSON.parse(await f.text());
-  if(payload.format!=='stok-firebase-import-v1'||!Array.isArray(payload.products)||!payload.products.length||payload.products.length>400)throw Error('Dosya biçimi veya ürün sayısı geçersiz.');
-  const codes=new Set();
-  for(const p of payload.products){
-   if(!p.name||!p.sku||codes.has(p.sku))throw Error('Eksik veya yinelenen stok kodu: '+p.sku);
-   codes.add(p.sku);
-   for(const key of ['buy','buyCase','whole','retail','caseQty','min'])if(!Number.isFinite(p[key])||p[key]<0)throw Error('Geçersiz fiyat veya miktar: '+p.sku);
-   if(!Number.isInteger(p.caseQty)||p.caseQty<1||!Number.isInteger(p.min)||p.min<0||(p.stock!==null&&(!Number.isInteger(p.stock)||p.stock<0)))throw Error('Geçersiz stok/koli: '+p.sku);
+  const XLSX=await loadExcelParser();
+  const wb=XLSX.read(await f.arrayBuffer(),{type:'array',cellDates:false});
+  const ws=wb.Sheets[wb.SheetNames[0]];if(!ws)throw Error('Excel çalışma sayfası bulunamadı.');
+  const rows=XLSX.utils.sheet_to_json(ws,{header:1,defval:null,raw:true,blankrows:false});
+  const norm=v=>String(v??'').trim().toLocaleLowerCase('tr-TR').replace(/[^a-z0-9ğüşıöç]/g,'');
+  const aliases={sku:['ürünkodu','stokkodu','sku','kod'],cat:['kategori','grup','sınıf'],name:['ürünadı','ürünismi','ürün','malzemeadı'],stock:['stok','stokadedi','stokmiktarı','miktar','adet'],buy:['alışfiyatı','alış','maliyet','alışbirimfiyatı'],retail:['satışfiyatı','satış','perakendefiyatı'],whole:['toptanfiyatı','toptan'],caseQty:['koliiçiadet','kolimiktarı','koliadedi'],note:['not','açıklama']};
+  let headerIndex=-1,indices={};
+  for(let i=0;i<Math.min(rows.length,15);i++){
+   const cols=rows[i].map(norm);const ix={};
+   for(const [key,names] of Object.entries(aliases))ix[key]=cols.findIndex(c=>names.includes(c));
+   if(ix.name>=0&&ix.sku>=0){headerIndex=i;indices=ix;break;}
   }
-  bulkPending=payload.products;
-  $('bulkPreview').textContent=`${bulkPending.length} ürün hazır; ${bulkPending.filter(p=>p.stock===null).length} ürünün stok adedi boş. Aktarmadan önce yedek almanız önerilir.`;
-  $('bulkImportButton').textContent=`${bulkPending.length} ürünü içeri aktar`;
-  $('bulkImportButton').disabled=false;
- }catch(e){$('bulkPreview').textContent='Dosya hatası: '+e.message;}
+  if(headerIndex<0)throw Error('Başlık satırında Ürün Kodu ve Ürün Adı bulunamadı. Excel başlıklarını kontrol edin.');
+  const result=[],seen=new Set();
+  for(let i=headerIndex+1;i<rows.length;i++){
+   const row=rows[i],get=key=>indices[key]<0?null:row[indices[key]],line=i+1;
+   if(row.every(v=>v===null||String(v).trim()===''))continue;
+   const name=String(get('name')??'').trim(),sku=String(get('sku')??'').trim();
+   if(!name||!sku)throw Error(`${line}. satır: ürün adı veya stok kodu boş.`);
+   if(seen.has(sku))throw Error(`${line}. satır: tekrarlanan stok kodu: ${sku}`);seen.add(sku);
+   const stock=parseWholeCell(get('stock'),'Stok',line,null),caseQty=parseWholeCell(get('caseQty'),'Koli içi adet',line,1);
+   if(caseQty<1)throw Error(`${line}. satır: koli içi adet en az 1 olmalı.`);
+   const buy=parseMoneyCell(get('buy'),'Alış fiyatı',line),retail=parseMoneyCell(get('retail'),'Satış fiyatı',line),whole=indices.whole>=0?parseMoneyCell(get('whole'),'Toptan fiyatı',line):retail;
+   result.push({name,sku,cat:String(get('cat')??'').trim(),supplier:'',note:String(get('note')??'').trim(),buy,buyCase:buy*caseQty,whole,retail,caseQty,stock,min:0,image:'',saleCount:0});
+  }
+  if(!result.length||result.length>400)throw Error('Excel dosyasında 1–400 arasında ürün olmalı.');
+  bulkPending=result;
+  $('bulkPreview').textContent=`${result.length} ürün okundu; ${result.filter(p=>p.stock===null).length} ürünün stok adedi boş. Aktarımdan önce yedek alın.`;
+  $('bulkImportButton').textContent=`${result.length} ürünü içeri aktar`;$('bulkImportButton').disabled=false;
+ }catch(e){$('bulkPreview').textContent='Excel hatası: '+e.message;}
 }
 async function importProducts(){return action(async()=>{
- if(!bulkPending)throw Error('Önce ürün dosyasını seçin.');
+ if(!bulkPending)throw Error('Önce Excel dosyasını seçin.');
  const existing=new Set(db.products.map(p=>p.sku).filter(Boolean));
  const duplicates=bulkPending.filter(p=>existing.has(p.sku));
  if(duplicates.length)throw Error('Bu stok kodları zaten mevcut: '+duplicates.slice(0,10).map(p=>p.sku).join(', ')+'. Aktarım yapılmadı.');
- if(!confirm(`${bulkPending.length} yeni ürün Firestore veritabanına eklenecek. Mevcut kayıtlar korunacak. Devam edilsin mi?`))return;
+ if(!confirm(`${bulkPending.length} ürün mevcut ürünlere eklenecek. Satış ve giderler korunacak. Devam edilsin mi?`))return;
  const batch=api.writeBatch(store);
- for(const p of bulkPending){const id=safeId('import_'+p.sku.replace(/[^A-Za-z0-9_-]/g,'_'));if(db.products.some(x=>x.id===id))throw Error('Kayıt kimliği çakışması: '+id);batch.set(ref('products',id),{...p,saleCount:0});}
- await batch.commit();$('bulkPreview').textContent=`${bulkPending.length} ürün başarıyla Firebase'e aktarıldı.`;bulkPending=null;$('bulkFile').value='';$('bulkImportButton').disabled=true;
- status('Toplu aktarım tamamlandı.');
+ for(const p of bulkPending){const id=safeId('import_'+p.sku.replace(/[^A-Za-z0-9_-]/g,'_'));if(db.products.some(x=>x.id===id))throw Error('Kayıt kimliği çakışması: '+id);batch.set(ref('products',id),{...p});}
+ await batch.commit();$('bulkPreview').textContent=`${bulkPending.length} ürün kaydedildi.`;bulkPending=null;$('bulkFile').value='';$('bulkImportButton').disabled=true;$('bulkImportButton').textContent='Excel dosyası seçin';status('Toplu aktarım tamamlandı.');
  });}
 async function login(event){event.preventDefault();$('authMessage').textContent='Giriş yapılıyor…';try{await api.signInWithEmailAndPassword(auth,$('loginEmail').value.trim(),$('loginPassword').value);$('authMessage').textContent='';}catch(e){$('authMessage').textContent='Giriş başarısız: '+e.code;}}
 async function loginGithub(){try{await api.signInWithPopup(auth,new api.GithubAuthProvider());}catch(e){$('authMessage').textContent='GitHub girişi başarısız: '+e.code;}}
