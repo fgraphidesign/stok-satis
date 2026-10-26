@@ -19,6 +19,42 @@ async function saveProduct(){return action(async()=>{
  await api.runTransaction(store,async tx=>{const target=ref('products',id),snap=await tx.get(target);if(old&&(!snap.exists()||normalizeProduct(snap.data()).stock!==editingStock))throw Error('Stok başka bir işlemle değişti. Ürünü yeniden açın.');if(!old&&snap.exists())throw Error('Kayıt kimliği çakıştı.');tx.set(target,withoutId(p));});cancelProduct();clearImage();status('Ürün kaydedildi.');
  });}
 async function deleteProduct(id){if(db.sales.some(s=>s.productId===id)){alert('Satış kaydı bulunan ürün silinemez.');return;}if(!confirm('Ürün silinsin mi?'))return;return action(async()=>{await api.runTransaction(store,async tx=>{const target=ref('products',safeId(id)),snap=await tx.get(target);if(!snap.exists())return;if(snap.data().saleCount>0)throw Error('Bu ürünün satış kayıtları var.');tx.delete(target);});});}
+function updateBulkDeleteButton(){
+ const count=db.products.length;
+ const hasSales=db.sales.length>0||db.products.some(p=>Number(p.saleCount||0)>0);
+ const info=document.getElementById('bulkDeleteInfo'),button=document.getElementById('bulkDeleteButton');
+ if(!info||!button)return;
+ info.textContent=`Kayıtlı ürün: ${count}. ${hasSales?'Satış geçmişi bulundu: toplu silme engellendi.':'Satış bağlantısı kontrolü: engel görünmüyor.'}`;
+ button.disabled=!ready||pending||!count||hasSales||!document.getElementById('bulkDeleteBackup').checked||document.getElementById('bulkDeleteConfirm').value.trim()!=='TÜM ÜRÜNLERİ SİL';
+}
+async function deleteAllProducts(){
+ if(!ready||!currentUser||pending)return;
+ if(!db.products.length){alert('Silinecek ürün bulunmuyor.');return;}
+ if(!document.getElementById('bulkDeleteBackup').checked){alert('Önce güncel JSON yedeğini indirin.');return;}
+ if(document.getElementById('bulkDeleteConfirm').value.trim()!=='TÜM ÜRÜNLERİ SİL'){alert('Onay metnini eksiksiz yazın.');return;}
+ if(db.sales.length||db.products.some(p=>Number(p.saleCount||0)>0)){alert('Satış geçmişiyle ilişkili ürünler bulunduğu için toplu silme engellendi.');return;}
+ const count=db.products.length;
+ if(count>450){alert('450 üründen fazlası tek seferde silinemez.');return;}
+ if(!confirm(`${count} ürün kalıcı olarak silinecek. Satış ve gider kayıtları korunacak. İşlemi onaylıyor musunuz?`))return;
+ return action(async()=>{
+  // Silme öncesi sunucudaki güncel satış ve ürün kayıtlarını kontrol et.
+  const uid=currentUser.uid;
+  const [salesSnapshot,productsSnapshot]=await Promise.all([
+   api.getDocsFromServer(api.collection(store,'users',uid,'sales')),
+   api.getDocsFromServer(api.collection(store,'users',uid,'products'))
+  ]);
+  if(salesSnapshot.size>0)throw Error('Satış kaydı bulundu. Ürünlerin toplu silinmesi engellendi.');
+  if(productsSnapshot.size!==count)throw Error('Ürün sayısı değişti. Sayfayı yenileyip yeniden kontrol edin.');
+  for(const doc of productsSnapshot.docs){if(Number(doc.data().saleCount||0)>0)throw Error('Satış geçmişi olan ürün bulundu. Silme engellendi.');}
+  const batch=api.writeBatch(store);
+  for(const doc of productsSnapshot.docs)batch.delete(doc.ref);
+  await batch.commit();
+  document.getElementById('bulkDeleteBackup').checked=false;
+  document.getElementById('bulkDeleteConfirm').value='';
+  status(`${count} ürün silindi. Excel'den yeniden aktarabilirsiniz.`);
+  alert(`${count} ürün silindi. Şimdi düzeltilmiş Excel dosyanızı içeri aktarabilirsiniz.`);
+ });
+}
 async function saveSale(){return action(async()=>{
  const p=product($('sProduct').value);if(!p)throw Error('Ürün seçin.');const qty=ensureNumber('sQty',true,1),price=ensureNumber('sPrice'),date=$('sDate').value;if(!date)throw Error('Tarih seçin.');const unit=$('sUnit').value,type=$('sType').value,note=$('sNote').value.trim(),saleId=crypto.randomUUID();
  await api.runTransaction(store,async tx=>{const pr=ref('products',p.id),snap=await tx.get(pr);if(!snap.exists())throw Error('Ürün bulunamadı.');const fresh=normalizeProduct(snap.data()),units=qty*(unit==='case'?fresh.caseQty:1);if(fresh.stock===null)throw Error('Bu ürünün stok miktarı bilinmiyor. Önce stok sayımı girin.');if(units>fresh.stock)throw Error('Yetersiz stok. Mevcut: '+fresh.stock+' adet.');const total=qty*price,cost=units*fresh.buy;tx.update(pr,{stock:fresh.stock-units,saleCount:Number(snap.data().saleCount||0)+1});tx.set(ref('sales',saleId),{date,productId:p.id,productName:fresh.name,type,unit,qty,units,price,total,cost,profit:total-cost,note});});$('sQty').value=1;$('sNote').value='';status('Satış kaydedildi, stok güncellendi.');
@@ -111,13 +147,13 @@ async function login(event){event.preventDefault();$('authMessage').textContent=
 async function loginGithub(){try{await api.signInWithPopup(auth,new api.GithubAuthProvider());}catch(e){$('authMessage').textContent='GitHub girişi başarısız: '+e.code;}}
 async function resetPassword(){const email=$('loginEmail').value.trim();if(!email){$('authMessage').textContent='Önce e-posta adresinizi girin.';return;}try{await api.sendPasswordResetEmail(auth,email);$('authMessage').textContent='Şifre sıfırlama isteği alındı. E-postanızı kontrol edin.';}catch(e){$('authMessage').textContent='İşlem başarısız: '+e.code;}}
 async function logout(){if(pending)return;await api.signOut(auth);}
-Object.assign(window,{previewBulkImport,importProducts,saveProduct,deleteProduct,saveSale,deleteSale,saveExpense,deleteExpense,restore,login,loginGithub,resetPassword,logout});
+Object.assign(window,{updateBulkDeleteButton,deleteAllProducts,previewBulkImport,importProducts,saveProduct,deleteProduct,saveSale,deleteSale,saveExpense,deleteExpense,restore,login,loginGithub,resetPassword,logout});
 async function start(){
  if(!firebaseConfig.apiKey||!firebaseConfig.projectId){$('setupBox').style.display='block';return;}
  try{
  const version='12.19.0',base=`https://www.gstatic.com/firebasejs/${version}/`,[app,authentication,firestore]=await Promise.all([import(base+'firebase-app.js'),import(base+'firebase-auth.js'),import(base+'firebase-firestore.js')]);api={...authentication,...firestore};const instance=app.initializeApp(firebaseConfig);auth=api.getAuth(instance);store=api.getFirestore(instance);$('loginBox').style.display='block';
  api.onAuthStateChanged(auth,user=>{subscriptions.forEach(fn=>fn());subscriptions=[];ready=false;loaded.clear();currentUser=user;db={products:[],sales:[],expenses:[]};renderAll();$('authScreen').style.display=user?'none':'grid';$('appShell').style.display=user?'block':'none';if(!user)return;$('userInfo').textContent=user.email||'Kullanıcı';status('Veriler yükleniyor…');const uid=user.uid;
- for(const [kind,normalize] of [['products',normalizeProduct],['sales',normalizeSale],['expenses',normalizeExpense]]){const col=api.collection(store,'users',uid,kind);subscriptions.push(api.onSnapshot(col,snapshot=>{if(currentUser?.uid!==uid)return;db[kind]=snapshot.docs.map(d=>normalize({...d.data(),id:d.id}));loaded.add(kind);ready=loaded.size===3;renderAll();if(ready)status(snapshot.metadata.hasPendingWrites?'Kaydediliyor…':snapshot.metadata.fromCache?'Önbellek verileri gösteriliyor.':'Bulut verileri güncel.');},e=>{ready=false;loaded.delete(kind);status('Veriler yüklenemedi: '+e.code);}));}
+ for(const [kind,normalize] of [['products',normalizeProduct],['sales',normalizeSale],['expenses',normalizeExpense]]){const col=api.collection(store,'users',uid,kind);subscriptions.push(api.onSnapshot(col,snapshot=>{if(currentUser?.uid!==uid)return;db[kind]=snapshot.docs.map(d=>normalize({...d.data(),id:d.id}));loaded.add(kind);ready=loaded.size===3;renderAll();updateBulkDeleteButton();if(ready)status(snapshot.metadata.hasPendingWrites?'Kaydediliyor…':snapshot.metadata.fromCache?'Önbellek verileri gösteriliyor.':'Bulut verileri güncel.');},e=>{ready=false;loaded.delete(kind);status('Veriler yüklenemedi: '+e.code);}));}
  });
  }catch(e){$('authMessage').textContent='Firebase yüklenemedi: '+e.message;}
 }
