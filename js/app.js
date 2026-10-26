@@ -71,6 +71,27 @@ function validateBackup(data){
  for(const p of result.products)p.saleCount=result.sales.filter(s=>s.productId===p.id).length;return result;
 }
 async function restore(){const file=$('restoreFile').files[0];if(!file){alert('JSON yedek dosyası seçin.');return;}return action(async()=>{const restored=validateBackup(JSON.parse(await file.text()));const operations=[];for(const k of ['products','sales','expenses']){const targetIds=new Set(restored[k].map(x=>x.id));for(const row of db[k])if(!targetIds.has(row.id))operations.push(['delete',k,row.id]);for(const row of restored[k])operations.push(['set',k,row.id,withoutId(row)]);}if(operations.length>450)throw Error('Yedek tek işlem sınırını aşıyor. Veriler değiştirilmedi.');if(!confirm('Mevcut veriler yedekle değiştirilecek. Güncel yedeğinizi aldıysanız devam edin.'))return;const batch=api.writeBatch(store);for(const [op,k,id,data] of operations)if(op==='delete')batch.delete(ref(k,id));else batch.set(ref(k,id),data);await batch.commit();status('Yedek geri yüklendi.');});}
+async function deleteSelectedProducts(){
+ const ids=[...selectedProductIds];
+ if(!ids.length){alert('Önce ürün seçin.');return;}
+ if(!confirm(`${ids.length} seçili ürün kalıcı olarak silinecek. Diğer ürünler korunacak. Devam edilsin mi?`))return;
+ return action(async()=>{
+  if(ids.length>400)throw Error('Tek işlemde en fazla 400 ürün silinebilir. Daha az ürün seçin.');
+  const uid=currentUser.uid;
+  const [salesSnap,productSnaps]=await Promise.all([
+   api.getDocsFromServer(api.collection(store,'users',uid,'sales')),
+   Promise.all(ids.map(id=>api.getDocFromServer(ref('products',safeId(id)))))
+  ]);
+  const linked=new Set(salesSnap.docs.map(d=>d.data().productId??d.data().product_id));
+  for(let i=0;i<ids.length;i++){
+   if(!productSnaps[i].exists())throw Error('Ürün listesi değişmiş. Sayfayı yenileyin.');
+   if(linked.has(ids[i])||Number(productSnaps[i].data().saleCount||0)>0)throw Error('Seçilen ürünlerden birinin satış geçmişi var. Hiçbir ürün silinmedi.');
+  }
+  const batch=api.writeBatch(store);for(const id of ids)batch.delete(ref('products',id));
+  await batch.commit();selectedProductIds.clear();updateSelectedProductsUI();
+  alert(`${ids.length} seçili ürün silindi. Diğer ürünler korundu.`);
+ });
+}
 let bulkPending=null;
 async function loadExcelParser(){
  if(window.XLSX)return window.XLSX;
@@ -115,7 +136,7 @@ async function previewBulkImport(){
    if(ix.name>=0&&ix.sku>=0){headerIndex=i;indices=ix;break;}
   }
   if(headerIndex<0)throw Error('Başlık satırında Ürün Kodu ve Ürün Adı bulunamadı. Excel başlıklarını kontrol edin.');
-  const result=[],seen=new Set();
+  const result=[],seen=new Set();const provided=Object.fromEntries(Object.keys(aliases).map(k=>[k,indices[k]>=0]));
   for(let i=headerIndex+1;i<rows.length;i++){
    const row=rows[i],get=key=>indices[key]<0?null:row[indices[key]],line=i+1;
    if(row.every(v=>v===null||String(v).trim()===''))continue;
@@ -125,29 +146,55 @@ async function previewBulkImport(){
    const stock=parseWholeCell(get('stock'),'Stok',line,null),caseQty=parseWholeCell(get('caseQty'),'Koli içi adet',line,1);
    if(caseQty<1)throw Error(`${line}. satır: koli içi adet en az 1 olmalı.`);
    const buy=parseMoneyCell(get('buy'),'Alış fiyatı',line),retail=parseMoneyCell(get('retail'),'Satış fiyatı',line),whole=indices.whole>=0?parseMoneyCell(get('whole'),'Toptan fiyatı',line):retail;
-   result.push({name,sku,cat:String(get('cat')??'').trim(),supplier:'',note:String(get('note')??'').trim(),buy,buyCase:buy*caseQty,whole,retail,caseQty,stock,min:0,image:'',saleCount:0});
+   result.push({name,sku,cat:String(get('cat')??'').trim(),note:String(get('note')??'').trim(),buy,buyCase:buy*caseQty,whole,retail,caseQty,stock,_provided:provided});
   }
   if(!result.length||result.length>400)throw Error('Excel dosyasında 1–400 arasında ürün olmalı.');
   bulkPending=result;
-  $('bulkPreview').textContent=`${result.length} ürün okundu; ${result.filter(p=>p.stock===null).length} ürünün stok adedi boş. Aktarımdan önce yedek alın.`;
-  $('bulkImportButton').textContent=`${result.length} ürünü içeri aktar`;$('bulkImportButton').disabled=false;
+  const matched=result.filter(p=>db.products.some(e=>e.sku===p.sku)).length;$('bulkPreview').textContent=`${result.length} ürün okundu. ${matched} mevcut ürün güncellenecek, ${result.length-matched} yeni ürün eklenecek. ${result.filter(p=>p.stock===null).length} boş stok hücresi mevcut ürünlerin stoklarını değiştirmeyecek. İşlemden önce JSON yedeği alın.`;
+  $('bulkImportButton').textContent='Excel değişikliklerini uygula';$('bulkImportButton').disabled=false;
  }catch(e){$('bulkPreview').textContent='Excel hatası: '+e.message;}
 }
 async function importProducts(){return action(async()=>{
  if(!bulkPending)throw Error('Önce Excel dosyasını seçin.');
- const existing=new Set(db.products.map(p=>p.sku).filter(Boolean));
- const duplicates=bulkPending.filter(p=>existing.has(p.sku));
- if(duplicates.length)throw Error('Bu stok kodları zaten mevcut: '+duplicates.slice(0,10).map(p=>p.sku).join(', ')+'. Aktarım yapılmadı.');
- if(!confirm(`${bulkPending.length} ürün mevcut ürünlere eklenecek. Satış ve giderler korunacak. Devam edilsin mi?`))return;
+ const uid=currentUser.uid;
+ // Sunucudaki stok kodlarını yeniden oku: ekranın eski verisine güvenme.
+ const snap=await api.getDocsFromServer(api.collection(store,'users',uid,'products'));
+ const bySku=new Map();
+ for(const d of snap.docs){const sku=String(d.data().sku??'').trim();if(!sku)continue;if(bySku.has(sku))throw Error('Veritabanında tekrarlanan stok kodu var: '+sku);bySku.set(sku,d);}
+ const updates=bulkPending.filter(p=>bySku.has(p.sku)).length;
+ const additions=bulkPending.length-updates;
+ if(!confirm(`${updates} ürün güncellenecek, ${additions} yeni ürün eklenecek. Mevcut stok hücresi Excel'de boşsa stok değişmeyecek. Onaylıyor musunuz?`))return;
+ if(bulkPending.length>400)throw Error('Tek işlem sınırı 400 ürün.');
  const batch=api.writeBatch(store);
- for(const p of bulkPending){const id=safeId('import_'+p.sku.replace(/[^A-Za-z0-9_-]/g,'_'));if(db.products.some(x=>x.id===id))throw Error('Kayıt kimliği çakışması: '+id);batch.set(ref('products',id),{...p});}
- await batch.commit();$('bulkPreview').textContent=`${bulkPending.length} ürün kaydedildi.`;bulkPending=null;$('bulkFile').value='';$('bulkImportButton').disabled=true;$('bulkImportButton').textContent='Excel dosyası seçin';status('Toplu aktarım tamamlandı.');
+ for(const p of bulkPending){
+  const existing=bySku.get(p.sku),v=p._provided;
+  if(existing){
+   const patch={};
+   if(v.name)patch.name=p.name;
+   if(v.cat)patch.cat=p.cat;
+   if(v.note)patch.note=p.note;
+   if(v.buy){patch.buy=p.buy;patch.buyCase=p.buy*(v.caseQty?p.caseQty:Number(existing.data().caseQty??1));}
+   if(v.retail)patch.retail=p.retail;
+   if(v.whole)patch.whole=p.whole;
+   if(v.caseQty){patch.caseQty=p.caseQty;if(!v.buy)patch.buyCase=Number(existing.data().buy??0)*p.caseQty;}
+   if(v.stock&&p.stock!==null)patch.stock=p.stock;
+   batch.update(existing.ref,patch);
+  }else{
+   const id=safeId('import_'+p.sku.replace(/[^A-Za-z0-9_-]/g,'_'));
+   if(snap.docs.some(d=>d.id===id))throw Error('Ürün kimliği çakışması: '+id);
+   batch.set(ref('products',id),{name:p.name,sku:p.sku,cat:p.cat,supplier:'',note:p.note,buy:p.buy,buyCase:p.buyCase,whole:p.whole,retail:p.retail,caseQty:p.caseQty,stock:p.stock,min:0,image:'',saleCount:0});
+  }
+ }
+ await batch.commit();
+ $('bulkPreview').textContent=`${updates} ürün güncellendi, ${additions} ürün eklendi.`;
+ bulkPending=null;$('bulkFile').value='';$('bulkImportButton').disabled=true;
+ $('bulkImportButton').textContent='Excel dosyası seçin';status('Excel senkronizasyonu tamamlandı.');
  });}
 async function login(event){event.preventDefault();$('authMessage').textContent='Giriş yapılıyor…';try{await api.signInWithEmailAndPassword(auth,$('loginEmail').value.trim(),$('loginPassword').value);$('authMessage').textContent='';}catch(e){$('authMessage').textContent='Giriş başarısız: '+e.code;}}
 async function loginGithub(){try{await api.signInWithPopup(auth,new api.GithubAuthProvider());}catch(e){$('authMessage').textContent='GitHub girişi başarısız: '+e.code;}}
 async function resetPassword(){const email=$('loginEmail').value.trim();if(!email){$('authMessage').textContent='Önce e-posta adresinizi girin.';return;}try{await api.sendPasswordResetEmail(auth,email);$('authMessage').textContent='Şifre sıfırlama isteği alındı. E-postanızı kontrol edin.';}catch(e){$('authMessage').textContent='İşlem başarısız: '+e.code;}}
 async function logout(){if(pending)return;await api.signOut(auth);}
-Object.assign(window,{updateBulkDeleteButton,deleteAllProducts,previewBulkImport,importProducts,saveProduct,deleteProduct,saveSale,deleteSale,saveExpense,deleteExpense,restore,login,loginGithub,resetPassword,logout});
+Object.assign(window,{deleteSelectedProducts,updateBulkDeleteButton,deleteAllProducts,previewBulkImport,importProducts,saveProduct,deleteProduct,saveSale,deleteSale,saveExpense,deleteExpense,restore,login,loginGithub,resetPassword,logout});
 async function start(){
  if(!firebaseConfig.apiKey||!firebaseConfig.projectId){$('setupBox').style.display='block';return;}
  try{
