@@ -60,7 +60,7 @@
 
 <section id="products" class="tab">
 <div class="report-head"><h2>Ürünler ve Stok</h2><button onclick="newProduct()">+ Yeni Ürün</button></div>
-<div class="card" style="margin-bottom:14px"><h3>Excel ile Toplu Ürün Yükleme</h3><p class="muted">Bilgisayarınızdan Excel (.xlsx) dosyasını seçin. Önce ürün sayısı ve hatalar gösterilir; onaydan sonra mevcut ürünlere eklenir. Boş stok hücreleri boş kalır.</p>
+<div class="card" style="margin-bottom:14px"><h3>Excel ile Ürün Ekleme ve Güncelleme</h3><p class="muted">Bilgisayarınızdan Excel (.xlsx) dosyasını seçin. Önce ürün sayısı ve hatalar gösterilir; stok kodu eşleşen ürünler güncellenir, yeni kodlar eklenir. Mevcut üründe boş stok hücresi stok miktarını değiştirmez.</p>
 <div class="toolbar"><input id="bulkFile" type="file" accept=".xlsx,.xls" aria-label="Excel dosyası seçin" onchange="previewBulkImport()"><button id="bulkImportButton" onclick="importProducts()" disabled>Excel dosyası seçin</button></div><p id="bulkPreview" class="muted">Düzenlediğiniz Excel dosyasını bilgisayarınızdan seçin.</p></div>
 <div class="card no-print" style="margin-bottom:14px;border:1px solid #b64b4b">
 <h3>Toplu Ürün Silme</h3>
@@ -94,7 +94,8 @@
 <div class="card">
 <h3>Detaylı Ürün / Stok Raporu</h3><div class="toolbar"><button onclick="printStockReport()">Stok Raporu PDF / Yazdır</button><button class="secondary" onclick="exportStockExcel()">Stok Raporu Excel (.xlsx)</button><div><label>Kategori</label><select id="stockCategory" onchange="renderProducts();renderStockReport()"><option value="">Tümü</option></select></div><div><label>Stok durumu</label><select id="stockFilter" onchange="renderProducts();renderStockReport()"><option value="">Tümü</option><option value="low">Kritik stok</option><option value="zero">Stok yok</option><option value="available">Stokta</option><option value="unknown">Sayım bekliyor</option></select></div></div><div id="stockSummary" class="stock-summary"></div>
 <div class="toolbar"><div style="min-width:260px"><label>Ürün ara</label><input id="productSearch" oninput="renderProducts();renderStockReport()" placeholder="Ürün, kod, kategori..."></div></div>
-<div class="tablewrap"><table><thead><tr><th>Ürün</th><th>Stok Kodu</th><th>Alış / Adet</th><th>Alış / Koli</th><th>Toptan / Adet</th><th>Perakende / Adet</th><th>Koli İçeriği</th><th>Stok</th><th>Maliyet</th><th></th></tr></thead><tbody id="productRows"></tbody></table></div>
+<div class="toolbar no-print" style="margin:12px 0"><strong id="selectedProductsCount">0 ürün seçildi</strong><button id="deleteSelectedProductsButton" type="button" class="danger" onclick="deleteSelectedProducts()" disabled>Seçilen ürünleri sil</button><span class="muted">Yalnızca işaretlenen ürünler silinir. Satış geçmişi olan ürünler silinemez.</span></div>
+<div class="tablewrap"><table><thead><tr><th><input id="selectVisibleProducts" type="checkbox" aria-label="Görüntülenen tüm ürünleri seç" onchange="toggleVisibleProducts(this.checked)"></th><th>Ürün</th><th>Stok Kodu</th><th>Alış / Adet</th><th>Alış / Koli</th><th>Toptan / Adet</th><th>Perakende / Adet</th><th>Koli İçeriği</th><th>Stok</th><th>Maliyet</th><th></th></tr></thead><tbody id="productRows"></tbody></table></div>
 </div>
 </section>
 
@@ -178,7 +179,7 @@
 
 <script src="./js/xlsx.js"></script>
 <script src="./js/features.js"></script>
-<script src="./js/base.js"></script>
-<script type="module" src="./js/app.js?v=bulk-delete-20261026-1"></script>
+<script src="./js/base.js?v=selected-upsert-20261026-2"></script>
+<script type="module" src="./js/app.js?v=selected-upsert-20261026-2"></script>
 </body>
 </html>
