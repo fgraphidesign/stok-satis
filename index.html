@@ -60,8 +60,8 @@
 
 <section id="products" class="tab">
 <div class="report-head"><h2>Ürünler ve Stok</h2><button onclick="newProduct()">+ Yeni Ürün</button></div>
-<div class="card" style="margin-bottom:14px"><h3>Toplu Ürün Aktarımı (Firebase)</h3><p class="muted">Hazırlanan ürün listesini yükleyin. Mevcut ürünler, satışlar ve giderler silinmez. Aynı stok kodu zaten varsa aktarım durur. Boş stok miktarı aynen boş kalır.</p>
-<div class="toolbar"><input id="bulkFile" type="file" accept=".json,application/json" onchange="previewBulkImport()"><button id="bulkImportButton" onclick="importProducts()" disabled>143 ürünü içeri aktar</button></div><p id="bulkPreview" class="muted">ZIP içindeki <code>data/urunler.json</code> dosyasını seçin.</p></div>
+<div class="card" style="margin-bottom:14px"><h3>Excel ile Toplu Ürün Yükleme</h3><p class="muted">Bilgisayarınızdan Excel (.xlsx) dosyasını seçin. Önce ürün sayısı ve hatalar gösterilir; onaydan sonra mevcut ürünlere eklenir. Boş stok hücreleri boş kalır.</p>
+<div class="toolbar"><input id="bulkFile" type="file" accept=".xlsx,.xls" aria-label="Excel dosyası seçin" onchange="previewBulkImport()"><button id="bulkImportButton" onclick="importProducts()" disabled>Excel dosyası seçin</button></div><p id="bulkPreview" class="muted">Düzenlediğiniz Excel dosyasını bilgisayarınızdan seçin.</p></div>
 <div class="card" id="productForm" style="display:none;margin-bottom:14px">
 <h3>Ürün Bilgileri</h3>
 <div class="formgrid">
