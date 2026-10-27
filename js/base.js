@@ -29,7 +29,45 @@ function renderProducts(){
  <td class="actions"><button onclick="editProduct('${p.id}')">Düzenle</button><button class="danger" onclick="deleteProduct('${p.id}')">Sil</button></td></tr>`).join(''):`<tr><td colspan="11" class="empty">Henüz ürün yok.</td></tr>`;
  updateSelectedProductsUI();
 }
-function fillProducts(){let opts='<option value="">Ürün seçin</option>'+db.products.map(p=>`<option value="${p.id}">${esc(p.name)} — stok: ${p.stock}</option>`).join('');$('sProduct').innerHTML=opts}
+let saleSearchMatches=[],saleSearchActive=0;
+function fillProducts(){
+ const selected=$('sProduct').value;
+ const p=product(selected);
+ $('saleSelectedProduct').textContent=p?`${p.name} · ${p.sku||'Kodsuz'} · ${stockText(p)}`:'Henüz ürün seçilmedi.';
+ if(!p&&selected)$('sProduct').value='';
+ if(!$('saleProductResults').hidden)searchSaleProducts();
+}
+function searchSaleProducts(){
+ $('sProduct').value='';$('saleSelectedProduct').textContent='Arama sonucundan bir ürün seçin.';syncSalePrice();
+ const query=$('saleProductSearch').value.trim().toLocaleLowerCase('tr-TR');
+ saleSearchMatches=db.products.filter(p=>`${p.name} ${p.sku||''} ${p.cat||''}`.toLocaleLowerCase('tr-TR').includes(query)).sort((a,b)=>a.name.localeCompare(b.name,'tr')).slice(0,50);
+ saleSearchActive=0;
+ const panel=$('saleProductResults');
+ panel.hidden=false;$('saleProductSearch').setAttribute('aria-expanded','true');
+ panel.innerHTML=saleSearchMatches.length?saleSearchMatches.map((p,i)=>`<button type="button" class="sale-search-option ${i===0?'active':''}" role="option" aria-selected="${i===0}" data-sale-index="${i}"><strong>${esc(p.name)}</strong><small>${esc(p.sku||'Kodsuz')} · ${esc(p.cat||'')} · ${stockText(p)} · Perakende ${money(p.retail)}</small></button>`).join(''):'<div class="muted" style="padding:12px">Eşleşen ürün bulunamadı.</div>';
+ panel.querySelectorAll('[data-sale-index]').forEach(button=>button.addEventListener('click',()=>selectSaleProduct(Number(button.dataset.saleIndex))));
+}
+function selectSaleProduct(index){
+ const p=saleSearchMatches[index];if(!p)return;
+ $('sProduct').value=p.id;
+ $('saleProductSearch').value=p.name;
+ $('saleProductResults').hidden=true;$('saleProductSearch').setAttribute('aria-expanded','false');
+ $('saleSelectedProduct').textContent=`Seçilen: ${p.name} · ${p.sku||'Kodsuz'} · ${stockText(p)}`;
+ syncSalePrice();
+ $('sQty').focus();
+}
+function saleSearchKeydown(e){
+ const panel=$('saleProductResults');
+ if(e.key==='Escape'){panel.hidden=true;return;}
+ if(e.key==='ArrowDown'||e.key==='ArrowUp'){
+  e.preventDefault();if(panel.hidden){searchSaleProducts();return;}
+  saleSearchActive=(saleSearchActive+(e.key==='ArrowDown'?1:-1)+saleSearchMatches.length)%Math.max(1,saleSearchMatches.length);
+  panel.querySelectorAll('[data-sale-index]').forEach((b,i)=>{b.classList.toggle('active',i===saleSearchActive);b.setAttribute('aria-selected',String(i===saleSearchActive));});
+  panel.querySelector('.active')?.scrollIntoView({block:'nearest'});
+ }
+ if(e.key==='Enter'&&!panel.hidden){e.preventDefault();selectSaleProduct(saleSearchActive);}
+}
+document.addEventListener('click',e=>{if(!e.target.closest('.sale-product-picker')){$('saleProductResults').hidden=true;$('saleProductSearch').setAttribute('aria-expanded','false');}});
 function syncSalePrice(){
  let p=product($('sProduct').value);if(!p){$('sPrice').value='';$('saleInfo').textContent='';return}
  let type=$('sType').value, unit=$('sUnit').value, price=type==='wholesale'?p.whole:p.retail;
@@ -67,7 +105,38 @@ function renderReport(){
  $('reportRows').innerHTML=sales.slice().sort((a,b)=>b.date.localeCompare(a.date)).map(s=>{let p=product(s.productId);return `<tr><td>${s.date}</td><td>${esc(p?.name||'Silinmiş')}</td><td>${s.type==='wholesale'?'Toptan':'Perakende'}</td><td>${num(s.units)} adet</td><td>${money(s.total)}</td><td>${money(s.cost)}</td><td>${money(s.profit)}</td></tr>`}).join('')||`<tr><td colspan="7" class="empty">Seçilen dönemde satış yok.</td></tr>`;
 }
 function backup(){let blob=new Blob([JSON.stringify(db,null,2)],{type:'application/json'}),a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='stok-satis-yedek-'+today()+'.json';a.click();URL.revokeObjectURL(a.href)}
-function renderDashboard(){let stock=db.products.reduce((a,p)=>a+p.stock,0),cost=db.products.reduce((a,p)=>a+p.stock*p.buy,0),sales=db.sales.reduce((a,s)=>a+s.total,0),profit=db.sales.reduce((a,s)=>a+s.profit,0);$('kStock').textContent=num(stock);$('kCost').textContent=money(cost);$('kSales').textContent=money(sales);$('kProfit').textContent=money(profit);let ss=db.sales.slice().sort((a,b)=>b.date.localeCompare(a.date)).slice(0,7);$('dashSales').innerHTML=ss.length?ss.map(s=>`<div style="padding:6px 0;border-bottom:1px solid var(--line)">${s.date} — ${esc(product(s.productId)?.name||'')} <b style="float:right">${money(s.total)}</b></div>`).join(''):'<div class="empty">Satış yok.</div>';let low=db.products.filter(p=>p.stock<=p.min);$('dashStock').innerHTML=low.length?low.map(p=>`<div style="padding:6px 0;border-bottom:1px solid var(--line)">${esc(p.name)} <b style="float:right">${stockText(p)}</b></div>`).join(''):'<div class="empty">Kritik stok yok.</div>'}
+function renderDashboard(){
+ const products=db.products,sales=db.sales,expenses=db.expenses;
+ const stock=products.reduce((a,p)=>a+(p.stock??0),0);
+ const cost=products.reduce((a,p)=>a+(p.stock??0)*p.buy,0);
+ const totalSales=sales.reduce((a,s)=>a+s.total,0);
+ const profit=sales.reduce((a,s)=>a+s.profit,0);
+ const expenseTotal=expenses.reduce((a,e)=>a+e.amount,0);
+ $('kStock').textContent=num(stock);$('kCost').textContent=money(cost);$('kSales').textContent=money(totalSales);$('kProfit').textContent=money(profit);
+ const retailValue=products.reduce((a,p)=>a+(p.stock??0)*p.retail,0);
+ const wholeValue=products.reduce((a,p)=>a+(p.stock??0)*p.whole,0);
+ const unknown=products.filter(p=>p.stock===null).length;
+ const zero=products.filter(p=>p.stock===0).length;
+ const low=products.filter(p=>p.stock!==null&&p.stock>0&&p.stock<=p.min).length;
+ const stats=[
+ ['Kayıtlı ürün',num(products.length)],['Stoku bilinmeyen',num(unknown)],['Stokta olmayan',num(zero)],['Kritik stok',num(low)],
+ ['Toptan stok değeri',money(wholeValue)],['Perakende stok değeri',money(retailValue)],
+ ['Satış işlemi',num(sales.length)],['Satılan toplam adet',num(sales.reduce((a,s)=>a+s.units,0))],
+ ['Toplam satış maliyeti',money(sales.reduce((a,s)=>a+s.cost,0))],['Toplam gider',money(expenseTotal)],
+ ['Net sonuç (kâr − gider)',money(profit-expenseTotal)],['Kategori sayısı',num(new Set(products.map(p=>p.cat||'Kategorisiz')).size)]
+ ];
+ $('dashboardStats').innerHTML=stats.map(([label,value])=>`<div class="card kpi"><div class="label">${esc(label)}</div><div class="value">${esc(value)}</div></div>`).join('');
+ function grouped(items,key,value){const map=new Map();items.forEach(x=>{const k=key(x)||'Diğer';map.set(k,(map.get(k)||0)+value(x));});return [...map].sort((a,b)=>b[1]-a[1]);}
+ function groupTable(id,items,format){$(id).innerHTML=items.length?`<div class="tablewrap"><table><tbody>${items.map(([name,value])=>`<tr><td>${esc(name)}</td><td class="num"><b>${format(value)}</b></td></tr>`).join('')}</tbody></table></div>`:'<div class="empty">Kayıt yok.</div>';}
+ groupTable('dashCategories',grouped(products,p=>p.cat||'Kategorisiz',p=>p.stock??0),num);
+ groupTable('dashTopProducts',grouped(sales,s=>product(s.productId)?.name||s.productName||'Silinmiş ürün',s=>s.units).slice(0,10),num);
+ groupTable('dashSaleTypes',grouped(sales,s=>s.type==='wholesale'?'Toptan':'Perakende',s=>s.total),money);
+ groupTable('dashExpenseCategories',grouped(expenses,e=>e.cat||'Diğer',e=>e.amount),money);
+ const recent=sales.slice().sort((a,b)=>b.date.localeCompare(a.date)).slice(0,7);
+ $('dashSales').innerHTML=recent.length?recent.map(s=>`<div style="padding:6px 0;border-bottom:1px solid var(--line)">${esc(s.date)} — ${esc(product(s.productId)?.name||s.productName||'Ürün bulunamadı')} <b style="float:right">${money(s.total)}</b></div>`).join(''):'<div class="empty">Satış yok.</div>';
+ const critical=products.filter(p=>p.stock!==null&&p.stock<=p.min).slice(0,30);
+ $('dashStock').innerHTML=critical.length?critical.map(p=>`<div style="padding:6px 0;border-bottom:1px solid var(--line)">${esc(p.name)} <b style="float:right">${stockText(p)}</b></div>`).join(''):'<div class="empty">Kritik stok yok.</div>';
+}
 function dataInfo(){$('dataInfo').innerHTML=`Ürün: <b>${db.products.length}</b> | Satış: <b>${db.sales.length}</b> | Gider: <b>${db.expenses.length}</b><br><span class="muted">Son yerel kayıt: ${new Date().toLocaleString('tr-TR')}</span>`}
 function esc(v){return String(v??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]))}
 function renderAll(){renderStockReport();renderProducts();fillProducts();renderSales();renderExpenses();renderReport();renderDashboard();dataInfo()}
