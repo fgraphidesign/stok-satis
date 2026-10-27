@@ -74,10 +74,12 @@ function syncSalePrice(){
  $('sPrice').value=unit==='case'?price*(p.caseQty||1):price;
  $('saleInfo').textContent=`Mevcut stok: ${stockText(p)} | Koli içi: ${p.caseQty} adet | Alış maliyeti/adet: ${money(p.buy)}`;
 }
+const PAYMENT_LABELS={cash:'Nakit',card:'Kredi Kartı',iban:'IBAN',deferred:'İleri Tarihli (Borç)',unknown:'Belirtilmemiş'};
+function paymentLabel(s){return PAYMENT_LABELS[s.paymentType]||'Belirtilmemiş';}
 function renderSales(){
  let f=$('sf').value,t=$('st').value,type=$('stypeFilter').value;
  let a=db.sales.filter(s=>(!f||s.date>=f)&&(!t||s.date<=t)&&(!type||s.type===type)).slice().sort((a,b)=>b.date.localeCompare(a.date));
- $('salesRows').innerHTML=a.length?a.map(s=>{let p=product(s.productId);return `<tr><td>${s.date}</td><td>${esc(p?.name||'Silinmiş ürün')}</td><td><span class="badge ${s.type}">${s.type==='wholesale'?'Toptan':'Perakende'}</span></td><td>${num(s.qty)} ${s.unit==='case'?'koli':'adet'} / ${num(s.units)} adet</td><td>${money(s.price)}</td><td>${money(s.total)}</td><td>${money(s.cost)}</td><td class="ok">${money(s.profit)}</td><td><button class="danger" onclick="deleteSale('${s.id}')">Sil</button></td></tr>`}).join(''):`<tr><td colspan="9" class="empty">Kayıt yok.</td></tr>`;
+ $('salesRows').innerHTML=a.length?a.map(s=>{let p=product(s.productId);return `<tr><td>${s.date}</td><td>${esc(p?.name||'Silinmiş ürün')}</td><td><span class="badge ${s.type}">${s.type==='wholesale'?'Toptan':'Perakende'}</span></td><td>${esc(paymentLabel(s))}</td><td>${num(s.qty)} ${s.unit==='case'?'koli':'adet'} / ${num(s.units)} adet</td><td>${money(s.price)}</td><td>${money(s.total)}</td><td>${money(s.cost)}</td><td class="ok">${money(s.profit)}</td><td><button class="danger" onclick="deleteSale('${s.id}')">Sil</button></td></tr>`}).join(''):`<tr><td colspan="10" class="empty">Kayıt yok.</td></tr>`;
 }
 function newExpense(){$('eDate').value=today();$('eCat').value='';$('eAmount').value='';$('eNote').value='';$('expenseForm').style.display='block'}
 function cancelExpense(){$('expenseForm').style.display='none'}
@@ -102,7 +104,9 @@ function renderReport(){
  let wp=sales.filter(s=>s.type==='wholesale').reduce((a,s)=>a+s.profit,0),rp=sales.filter(s=>s.type==='retail').reduce((a,s)=>a+s.profit,0);
  $('profitSummary').innerHTML=`<table><tr><td>Toptan satış</td><td class="num">${money(wh)}</td></tr><tr><td>Toptan brüt kâr</td><td class="num">${money(wp)}</td></tr><tr><td>Perakende satış</td><td class="num">${money(re)}</td></tr><tr><td>Perakende brüt kâr</td><td class="num">${money(rp)}</td></tr></table>`;
  $('periodSummary').innerHTML=`<table><tr><td>Satış maliyeti</td><td class="num">${money(sales.reduce((a,s)=>a+s.cost,0))}</td></tr><tr><td>Brüt kâr</td><td class="num">${money(profit)}</td></tr><tr><td>Gider</td><td class="num">${money(exp)}</td></tr><tr><td><b>Net sonuç</b></td><td class="num"><b>${money(profit-exp)}</b></td></tr></table>`;
- $('reportRows').innerHTML=sales.slice().sort((a,b)=>b.date.localeCompare(a.date)).map(s=>{let p=product(s.productId);return `<tr><td>${s.date}</td><td>${esc(p?.name||'Silinmiş')}</td><td>${s.type==='wholesale'?'Toptan':'Perakende'}</td><td>${num(s.units)} adet</td><td>${money(s.total)}</td><td>${money(s.cost)}</td><td>${money(s.profit)}</td></tr>`}).join('')||`<tr><td colspan="7" class="empty">Seçilen dönemde satış yok.</td></tr>`;
+ const payments=['cash','card','iban','deferred','unknown'].map(key=>({key,label:PAYMENT_LABELS[key],items:sales.filter(s=>(s.paymentType||'unknown')===key)}));
+ $('paymentSummary').innerHTML=`<div class="tablewrap"><table><thead><tr><th>Ödeme türü</th><th>İşlem</th><th class="num">Satış tutarı</th></tr></thead><tbody>${payments.map(g=>`<tr><td>${esc(g.label)}</td><td>${num(g.items.length)}</td><td class="num">${money(g.items.reduce((a,s)=>a+s.total,0))}</td></tr>`).join('')}</tbody></table></div><p class="muted">Tahsil edildiği varsayılan (Nakit + Kredi Kartı + IBAN): ${money(payments.filter(g=>['cash','card','iban'].includes(g.key)).reduce((a,g)=>a+g.items.reduce((b,s)=>b+s.total,0),0))}. Borç olarak kaydedilen: ${money(payments.find(g=>g.key==='deferred').items.reduce((a,s)=>a+s.total,0))}. Geçmiş kayıtların tahsilat durumu bilinmeyebilir.</p>`;
+ $('reportRows').innerHTML=sales.slice().sort((a,b)=>b.date.localeCompare(a.date)).map(s=>{let p=product(s.productId);return `<tr><td>${s.date}</td><td>${esc(p?.name||'Silinmiş')}</td><td>${s.type==='wholesale'?'Toptan':'Perakende'}</td><td>${esc(paymentLabel(s))}</td><td>${num(s.units)} adet</td><td>${money(s.total)}</td><td>${money(s.cost)}</td><td>${money(s.profit)}</td></tr>`}).join('')||`<tr><td colspan="8" class="empty">Seçilen dönemde satış yok.</td></tr>`;
 }
 function backup(){let blob=new Blob([JSON.stringify(db,null,2)],{type:'application/json'}),a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='stok-satis-yedek-'+today()+'.json';a.click();URL.revokeObjectURL(a.href)}
 function renderDashboard(){
