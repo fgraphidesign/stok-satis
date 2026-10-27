@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="theme-color" content="#172b4d">
 <title>Stok & Satış Yönetimi</title>
-<link rel="stylesheet" href="./css/style.css">
+<link rel="stylesheet" href="./css/style.css?v=sales-search-stats-20261027">
 </head>
 <body>
 
@@ -51,6 +51,14 @@
 <div class="card kpi"><div class="label">Stok maliyeti</div><div class="value" id="kCost">₺0,00</div></div>
 <div class="card kpi"><div class="label">Toplam satış</div><div class="value" id="kSales">₺0,00</div></div>
 <div class="card kpi"><div class="label">Brüt kâr</div><div class="value" id="kProfit">₺0,00</div></div>
+</div>
+<h3 style="margin-top:22px">Tüm veriler — ayrıntılı istatistikler</h3>
+<div class="grid dashboard-stats" id="dashboardStats"></div>
+<div class="grid2" style="margin-top:14px">
+<div class="card"><h3>Kategoriye göre stok</h3><div id="dashCategories"></div></div>
+<div class="card"><h3>En çok satılan ürünler</h3><div id="dashTopProducts"></div></div>
+<div class="card"><h3>Satış türlerine göre sonuç</h3><div id="dashSaleTypes"></div></div>
+<div class="card"><h3>Gider kategorileri</h3><div id="dashExpenseCategories"></div></div>
 </div>
 <div class="grid2" style="margin-top:14px">
 <div class="card"><h3>Son satışlar</h3><div id="dashSales"></div></div>
@@ -104,7 +112,7 @@
 <div class="card" style="margin-bottom:14px">
 <div class="formgrid">
 <div><label>Tarih</label><input id="sDate" type="date"></div>
-<div><label>Ürün</label><select id="sProduct" onchange="syncSalePrice()"></select></div>
+<div class="wide sale-product-picker"><label for="saleProductSearch">Ürün ara ve seç</label><input id="saleProductSearch" type="search" autocomplete="off" placeholder="Ürün adı, stok kodu veya kategori yazın…" oninput="searchSaleProducts()" onkeydown="saleSearchKeydown(event)" aria-controls="saleProductResults" aria-expanded="false"><input type="hidden" id="sProduct"><div id="saleProductResults" class="sale-search-results" role="listbox" hidden></div><div id="saleSelectedProduct" class="sale-selected-product muted">Henüz ürün seçilmedi.</div></div>
 <div><label>Satış türü</label><select id="sType" onchange="syncSalePrice()"><option value="wholesale">Toptan</option><option value="retail">Perakende</option></select></div>
 <div><label>Satış birimi</label><select id="sUnit" onchange="syncSalePrice()"><option value="unit">Adet</option><option value="case">Koli</option></select></div>
 <div><label>Miktar</label><input id="sQty" type="number" min="1" step="1" value="1"></div>
@@ -179,7 +187,7 @@
 
 <script src="./js/xlsx.js"></script>
 <script src="./js/features.js"></script>
-<script src="./js/base.js?v=selected-upsert-20261026-2"></script>
-<script type="module" src="./js/app.js?v=selected-upsert-20261026-2"></script>
+<script src="./js/base.js?v=sales-search-stats-20261027"></script>
+<script type="module" src="./js/app.js?v=sales-search-stats-20261027"></script>
 </body>
 </html>
