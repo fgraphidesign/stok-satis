@@ -34,3 +34,11 @@ footer{text-align:center;color:var(--muted);padding:25px;font-size:12px}
 }
 
 .auth-screen{min-height:100vh;display:grid;place-items:center;padding:20px}.auth-card{background:white;max-width:440px;width:100%;padding:28px;border:1px solid #dfe3e8;border-radius:12px}.link{background:transparent;color:#1f5eff}.divider{text-align:center;margin:12px}.github{width:100%;background:#17202a}.product-thumb{width:50px;height:50px;object-fit:contain;float:left;margin-right:8px}.image-preview{width:120px;height:120px;object-fit:contain;border:1px solid #dfe3e8}.stock-summary{margin:12px 0}.price-controls{margin-top:16px}button:disabled{opacity:.5;cursor:wait}
+
+.sale-product-picker{position:relative}
+.sale-search-results{position:absolute;top:calc(100% - 26px);left:0;right:0;z-index:12;max-height:300px;overflow-y:auto;background:white;border:1px solid #b8c7da;border-radius:8px;box-shadow:0 10px 24px #17202a25}
+.sale-search-option{display:block;width:100%;background:white;color:#17202a;text-align:left;border-radius:0;border-bottom:1px solid #edf0f5;padding:10px 12px;font-weight:400}
+.sale-search-option:hover,.sale-search-option.active{background:#eaf0ff;color:#17202a}
+.sale-search-option small{display:block;color:#667085;margin-top:3px}
+.sale-selected-product{font-size:12px;margin-top:7px}
+.dashboard-stats .value{font-size:20px;overflow-wrap:anywhere}
