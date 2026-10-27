@@ -114,6 +114,7 @@
 <div><label>Tarih</label><input id="sDate" type="date"></div>
 <div class="wide sale-product-picker"><label for="saleProductSearch">Ürün ara ve seç</label><input id="saleProductSearch" type="search" autocomplete="off" placeholder="Ürün adı, stok kodu veya kategori yazın…" oninput="searchSaleProducts()" onkeydown="saleSearchKeydown(event)" aria-controls="saleProductResults" aria-expanded="false"><input type="hidden" id="sProduct"><div id="saleProductResults" class="sale-search-results" role="listbox" hidden></div><div id="saleSelectedProduct" class="sale-selected-product muted">Henüz ürün seçilmedi.</div></div>
 <div><label>Satış türü</label><select id="sType" onchange="syncSalePrice()"><option value="wholesale">Toptan</option><option value="retail">Perakende</option></select></div>
+<div><label for="sPayment">Ödeme türü</label><select id="sPayment" required><option value="cash">Nakit</option><option value="card">Kredi Kartı</option><option value="iban">IBAN</option><option value="deferred">İleri Tarihli (Borç)</option></select></div>
 <div><label>Satış birimi</label><select id="sUnit" onchange="syncSalePrice()"><option value="unit">Adet</option><option value="case">Koli</option></select></div>
 <div><label>Miktar</label><input id="sQty" type="number" min="1" step="1" value="1"></div>
 <div><label>Birim satış fiyatı</label><input id="sPrice" type="number" min="0" step="0.01"></div>
@@ -125,7 +126,7 @@
 <div class="card">
 <h3>Satış Geçmişi</h3>
 <div class="toolbar"><div><label>Başlangıç</label><input id="sf" type="date" onchange="renderSales()"></div><div><label>Bitiş</label><input id="st" type="date" onchange="renderSales()"></div><div><label>Tür</label><select id="stypeFilter" onchange="renderSales()"><option value="">Tümü</option><option value="wholesale">Toptan</option><option value="retail">Perakende</option></select></div></div>
-<div class="tablewrap"><table><thead><tr><th>Tarih</th><th>Ürün</th><th>Tür</th><th>Miktar</th><th>Birim Fiyat</th><th>Satış</th><th>Maliyet</th><th>Kâr</th><th></th></tr></thead><tbody id="salesRows"></tbody></table></div>
+<div class="tablewrap"><table><thead><tr><th>Tarih</th><th>Ürün</th><th>Tür</th><th>Ödeme</th><th>Miktar</th><th>Birim Fiyat</th><th>Satış</th><th>Maliyet</th><th>Kâr</th><th></th></tr></thead><tbody id="salesRows"></tbody></table></div>
 </div>
 </section>
 
@@ -163,11 +164,12 @@
 <div class="card"><span class="muted">Brüt kâr</span><strong id="rProfit">₺0</strong></div>
 <div class="card"><span class="muted">Giderler</span><strong id="rExpense">₺0</strong></div>
 </div>
+<div class="card" style="margin-top:12px"><h3>Ödeme Türlerine Göre Satışlar</h3><p class="muted">Seçilen tarih aralığına göre satış tutarı ve işlem sayısı. Borç, tahsil edilmemiş satış olarak ayrıca gösterilir. Eski kayıtlarda ödeme türü belirtilmemiş olabilir.</p><div id="paymentSummary"></div></div>
 <div class="grid2">
 <div class="card"><h3>Toptan / Perakende Kâr Özeti</h3><div id="profitSummary"></div></div>
 <div class="card"><h3>Dönem Özeti</h3><div id="periodSummary"></div></div>
 </div>
-<div class="card" style="margin-top:12px"><h3>Satış Detayı</h3><div class="tablewrap"><table><thead><tr><th>Tarih</th><th>Ürün</th><th>Tür</th><th>Miktar</th><th>Satış</th><th>Maliyet</th><th>Brüt Kâr</th></tr></thead><tbody id="reportRows"></tbody></table></div></div>
+<div class="card" style="margin-top:12px"><h3>Satış Detayı</h3><div class="tablewrap"><table><thead><tr><th>Tarih</th><th>Ürün</th><th>Tür</th><th>Ödeme</th><th>Miktar</th><th>Satış</th><th>Maliyet</th><th>Brüt Kâr</th></tr></thead><tbody id="reportRows"></tbody></table></div></div>
 </section>
 
 <section id="backup" class="tab">
@@ -186,8 +188,8 @@
 </div>
 
 <script src="./js/xlsx.js"></script>
-<script src="./js/features.js"></script>
-<script src="./js/base.js?v=sales-search-stats-20261027"></script>
-<script type="module" src="./js/app.js?v=sales-search-stats-20261027"></script>
+<script src="./js/features.js?v=payment-types-20261027"></script>
+<script src="./js/base.js?v=payment-types-20261027"></script>
+<script type="module" src="./js/app.js?v=payment-types-20261027"></script>
 </body>
 </html>
