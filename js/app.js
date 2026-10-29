@@ -3,7 +3,7 @@ let auth,store,currentUser=null,ready=false,pending=false,subscriptions=[];
 const loaded=new Set();
 function status(text){document.getElementById('syncStatus').textContent=text;}
 function reportError(e){console.error(e);status('İşlem tamamlanamadı.');alert(e.message||'İşlem başarısız oldu.');}
-async function action(fn){if(pending)return;if(!currentUser||!ready){alert('Verilerin yüklenmesini ve bağlantıyı bekleyin.');return;}pending=true;const buttons=[...document.querySelectorAll('button')].filter(b=>!b.disabled);buttons.forEach(b=>b.disabled=true);try{await fn();}catch(e){reportError(e);}finally{pending=false;buttons.forEach(b=>b.disabled=false);}}
+async function action(fn){if(pending)return;if(!currentUser||!ready){alert('Verilerin yüklenmesini ve bağlantıyı bekleyin.');return;}pending=true;const buttons=[...document.querySelectorAll('button')].filter(b=>!b.disabled);buttons.forEach(b=>b.disabled=true);try{await fn();}catch(e){reportError(e);}finally{pending=false;buttons.forEach(b=>b.disabled=b.id==='bulkImportButton'&&!bulkPending);}}
 let api;
 function ref(kind,id){return api.doc(store,'users',currentUser.uid,kind,id);}
 function withoutId(obj){const {id,...data}=obj;return data;}
@@ -108,7 +108,7 @@ async function loadExcelParser(){
 }
 function parseMoneyCell(value,label,row){
  if(value===null||value===undefined||String(value).trim()==='')return 0;
- if(typeof value==='number')return value;
+ if(typeof value==='number'){if(!Number.isFinite(value)||value<0)throw Error(`${row}. satır: ${label} geçersiz.`);return value;}
  let v=String(value).trim().replace(/\s/g,'').replace(/₺|TL|TRY/gi,'');
  if(v.includes(',')&&v.includes('.'))v=v.lastIndexOf(',')>v.lastIndexOf('.')?v.replace(/\./g,'').replace(',','.'):v.replace(/,/g,'');
  else if(v.includes(','))v=v.replace(',','.');
@@ -128,7 +128,7 @@ async function previewBulkImport(){
   const ws=wb.Sheets[wb.SheetNames[0]];if(!ws)throw Error('Excel çalışma sayfası bulunamadı.');
   const rows=XLSX.utils.sheet_to_json(ws,{header:1,defval:null,raw:true,blankrows:false});
   const norm=v=>String(v??'').trim().toLocaleLowerCase('tr-TR').replace(/[^a-z0-9ğüşıöç]/g,'');
-  const aliases={sku:['ürünkodu','stokkodu','sku','kod'],cat:['kategori','grup','sınıf'],name:['ürünadı','ürünismi','ürün','malzemeadı'],stock:['stok','stokadedi','stokmiktarı','miktar','adet'],buy:['alışfiyatı','alış','maliyet','alışbirimfiyatı'],retail:['satışfiyatı','satış','perakendefiyatı'],whole:['toptanfiyatı','toptan'],caseQty:['koliiçiadet','kolimiktarı','koliadedi'],note:['not','açıklama']};
+  const aliases={sku:['ürünkodu','stokkodu','sku','kod'],cat:['kategori','grup','sınıf'],name:['ürünadı','ürünismi','ürün','malzemeadı'],stock:['stok','stokadet','stokadedi','stokmiktarı','miktar','adet'],buy:['alışfiyatı','alış','alışadet','maliyet','alışbirimfiyatı'],buyCase:['alışkoli','kolialışfiyatı'],retail:['satışfiyatı','satış','perakende','perakendeadet','perakendefiyatı','perakendesatışfiyatı'],whole:['toptanfiyatı','toptan','toptanadet','toptansatışfiyatı'],caseQty:['koliiçiadet','kolimiktarı','koliadedi'],supplier:['tedarikçi'],min:['minimumstok','minstok'],note:['not','açıklama']};
   let headerIndex=-1,indices={};
   for(let i=0;i<Math.min(rows.length,15);i++){
    const cols=rows[i].map(norm);const ix={};
@@ -137,6 +137,10 @@ async function previewBulkImport(){
   }
   if(headerIndex<0)throw Error('Başlık satırında Ürün Kodu ve Ürün Adı bulunamadı. Excel başlıklarını kontrol edin.');
   const result=[],seen=new Set();const provided=Object.fromEntries(Object.keys(aliases).map(k=>[k,indices[k]>=0]));
+  const columnLabels={buy:'Alış/adet',buyCase:'Alış/koli',whole:'Toptan/adet',retail:'Perakende/adet',stock:'Stok/adet'};
+  const reportOnly=['tamkoli','artanadet','stokdurumu','stokmaliyeti','toptanstokdeğeri','perakendestokdeğeri'];
+  const unknownPrices=rows[headerIndex].filter(h=>/alış|satış|perakende|toptan|stok.*adet/.test(norm(h))&&!reportOnly.includes(norm(h))&&!Object.values(aliases).some(names=>names.includes(norm(h))));
+  if(unknownPrices.length)throw Error('Tanınmayan fiyat veya stok başlığı: '+unknownPrices.join(', ')+'. Aktarım yapılmadı.');
   for(let i=headerIndex+1;i<rows.length;i++){
    const row=rows[i],get=key=>indices[key]<0?null:row[indices[key]],line=i+1;
    if(row.every(v=>v===null||String(v).trim()===''))continue;
@@ -146,11 +150,16 @@ async function previewBulkImport(){
    const stock=parseWholeCell(get('stock'),'Stok',line,null),caseQty=parseWholeCell(get('caseQty'),'Koli içi adet',line,1);
    if(caseQty<1)throw Error(`${line}. satır: koli içi adet en az 1 olmalı.`);
    const buy=parseMoneyCell(get('buy'),'Alış fiyatı',line),retail=parseMoneyCell(get('retail'),'Satış fiyatı',line),whole=indices.whole>=0?parseMoneyCell(get('whole'),'Toptan fiyatı',line):retail;
-   result.push({name,sku,cat:String(get('cat')??'').trim(),note:String(get('note')??'').trim(),buy,buyCase:buy*caseQty,whole,retail,caseQty,stock,_provided:provided});
+   const rowProvided={...provided};
+   for(const key of ['buy','buyCase','whole','retail','stock','caseQty','min'])if(get(key)===null||get(key)===undefined||String(get(key)).trim()==='')rowProvided[key]=false;
+   const buyCase=rowProvided.buyCase?parseMoneyCell(get('buyCase'),'Koli alış fiyatı',line):buy*caseQty;
+   result.push({name,sku,cat:String(get('cat')??'').trim(),supplier:String(get('supplier')??'').trim(),note:String(get('note')??'').trim(),buy,buyCase,whole,retail,caseQty,stock,min:parseWholeCell(get('min'),'Minimum stok',line,0),_provided:rowProvided});
   }
-  if(!result.length||result.length>400)throw Error('Excel dosyasında 1–400 arasında ürün olmalı.');
+  if(!result.length)throw Error('Excel dosyasında ürün bulunamadı.');
   bulkPending=result;
-  const matched=result.filter(p=>db.products.some(e=>e.sku===p.sku)).length;$('bulkPreview').textContent=`${result.length} ürün okundu. ${matched} mevcut ürün güncellenecek, ${result.length-matched} yeni ürün eklenecek. ${result.filter(p=>p.stock===null).length} boş stok hücresi mevcut ürünlerin stoklarını değiştirmeyecek. İşlemden önce JSON yedeği alın.`;
+  const matched=result.filter(p=>db.products.some(e=>e.sku===p.sku)).length;
+  const recognized=Object.entries(columnLabels).filter(([key])=>provided[key]).map(([,label])=>label);
+  $('bulkPreview').textContent=`${result.length} ürün okundu. ${matched} mevcut ürün eşleşti, ${result.length-matched} yeni ürün eklenecek. Okunan alanlar: ${recognized.join(', ')||'Ürün bilgileri'}. Boş sayısal hücreler mevcut değerleri değiştirmez. Excel'de olmayan ürünler korunur.`;
   $('bulkImportButton').textContent='Excel değişikliklerini uygula';$('bulkImportButton').disabled=false;
  }catch(e){$('bulkPreview').textContent='Excel hatası: '+e.message;}
 }
@@ -161,11 +170,7 @@ async function importProducts(){return action(async()=>{
  const snap=await api.getDocsFromServer(api.collection(store,'users',uid,'products'));
  const bySku=new Map();
  for(const d of snap.docs){const sku=String(d.data().sku??'').trim();if(!sku)continue;if(bySku.has(sku))throw Error('Veritabanında tekrarlanan stok kodu var: '+sku);bySku.set(sku,d);}
- const updates=bulkPending.filter(p=>bySku.has(p.sku)).length;
- const additions=bulkPending.length-updates;
- if(!confirm(`${updates} ürün güncellenecek, ${additions} yeni ürün eklenecek. Mevcut stok hücresi Excel'de boşsa stok değişmeyecek. Onaylıyor musunuz?`))return;
- if(bulkPending.length>400)throw Error('Tek işlem sınırı 400 ürün.');
- const batch=api.writeBatch(store);
+ const plan=[],ids=new Set(snap.docs.map(d=>d.id));let unchanged=0;
  for(const p of bulkPending){
   const existing=bySku.get(p.sku),v=p._provided;
   if(existing){
@@ -173,22 +178,42 @@ async function importProducts(){return action(async()=>{
    if(v.name)patch.name=p.name;
    if(v.cat)patch.cat=p.cat;
    if(v.note)patch.note=p.note;
+   if(v.supplier)patch.supplier=p.supplier;
+   if(v.min)patch.min=p.min;
    if(v.buy){patch.buy=p.buy;patch.buyCase=p.buy*(v.caseQty?p.caseQty:Number(existing.data().caseQty??1));}
    if(v.retail)patch.retail=p.retail;
    if(v.whole)patch.whole=p.whole;
    if(v.caseQty){patch.caseQty=p.caseQty;if(!v.buy)patch.buyCase=Number(existing.data().buy??0)*p.caseQty;}
+   if(v.buyCase)patch.buyCase=p.buyCase;
    if(v.stock&&p.stock!==null)patch.stock=p.stock;
-   batch.update(existing.ref,patch);
+   const changed=Object.fromEntries(Object.entries(patch).filter(([key,value])=>existing.data()[key]!==value));
+   if(Object.keys(changed).length)plan.push({id:existing.id,target:existing.ref,values:changed,isNew:false,sku:p.sku});else unchanged++;
   }else{
    const id=safeId('import_'+p.sku.replace(/[^A-Za-z0-9_-]/g,'_'));
-   if(snap.docs.some(d=>d.id===id))throw Error('Ürün kimliği çakışması: '+id);
-   batch.set(ref('products',id),{name:p.name,sku:p.sku,cat:p.cat,supplier:'',note:p.note,buy:p.buy,buyCase:p.buyCase,whole:p.whole,retail:p.retail,caseQty:p.caseQty,stock:p.stock,min:0,image:'',saleCount:0});
+   if(ids.has(id))throw Error('Ürün kimliği çakışması: '+id);ids.add(id);
+   plan.push({id,target:ref('products',id),isNew:true,sku:p.sku,values:{name:p.name,sku:p.sku,cat:p.cat,supplier:p.supplier||'',note:p.note,buy:p.buy,buyCase:p.buyCase,whole:p.whole,retail:p.retail,caseQty:p.caseQty,stock:p.stock,min:p.min??0,image:'',saleCount:0}});
   }
  }
- await batch.commit();
- $('bulkPreview').textContent=`${updates} ürün güncellendi, ${additions} ürün eklendi.`;
+ const updates=plan.filter(p=>!p.isNew).length,additions=plan.length-updates;
+ if(!confirm(`${updates} ürünün değişen bilgileri kaydedilecek, ${additions} yeni ürün eklenecek; ${unchanged} ürün zaten aynı. Boş sayısal hücreler ve dosyada bulunmayan ürünler korunacak. Onaylıyor musunuz?`))return;
+ let written=0;
+ try{
+  for(let i=0;i<plan.length;i+=400){
+   const batch=api.writeBatch(store),part=plan.slice(i,i+400);
+   for(const p of part){if(p.isNew)batch.set(p.target,p.values);else batch.update(p.target,p.values);}
+   await batch.commit();written+=part.length;status(`${written} / ${plan.length} ürün kaydedildi…`);
+  }
+ }catch(e){throw Error(`${written} ürün kaydedildi; kalan işlem tamamlanamadı: ${e.message}. Dosyayı tekrar yüklediğinizde yalnızca kalan değişiklikler uygulanır.`);}
+ let verified;
+ try{verified=await api.getDocsFromServer(api.collection(store,'users',uid,'products'));}
+ catch(e){throw Error(`${written} ürün için kayıt işlemi tamamlandı, ancak sunucudan doğrulama yapılamadı: ${e.message}. Başarı doğrulanmadı.`);}
+ const saved=new Map(verified.docs.map(d=>[d.id,d.data()]));
+ const failed=plan.filter(p=>!saved.has(p.id)||Object.entries(p.values).some(([key,value])=>saved.get(p.id)[key]!==value));
+ db.products=verified.docs.map(d=>normalizeProduct({...d.data(),id:d.id}));renderAll();updateBulkDeleteButton();
+ if(failed.length)throw Error(`Sunucu kontrolünde ${failed.length} ürünün bilgileri Excel ile eşleşmedi. Stok kodları: ${failed.slice(0,10).map(p=>p.sku).join(', ')}. Güncelleme doğrulanmadı.`);
+ $('bulkPreview').textContent=`${updates} ürün güncellendi, ${additions} ürün eklendi; ${unchanged} ürün zaten aynıydı. Fiyat ve stok dahil kaydedilen alanlar sunucudan okunarak doğrulandı.`;
  bulkPending=null;$('bulkFile').value='';$('bulkImportButton').disabled=true;
- $('bulkImportButton').textContent='Excel dosyası seçin';status('Excel senkronizasyonu tamamlandı.');
+ $('bulkImportButton').textContent='Excel dosyası seçin';status('Excel güncellemesi sunucudan doğrulandı.');
  });}
 async function login(event){event.preventDefault();$('authMessage').textContent='Giriş yapılıyor…';try{await api.signInWithEmailAndPassword(auth,$('loginEmail').value.trim(),$('loginPassword').value);$('authMessage').textContent='';}catch(e){$('authMessage').textContent='Giriş başarısız: '+e.code;}}
 async function loginGithub(){try{await api.signInWithPopup(auth,new api.GithubAuthProvider());}catch(e){$('authMessage').textContent='GitHub girişi başarısız: '+e.code;}}
