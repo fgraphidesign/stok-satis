@@ -42,3 +42,18 @@ footer{text-align:center;color:var(--muted);padding:25px;font-size:12px}
 .sale-search-option small{display:block;color:#667085;margin-top:3px}
 .sale-selected-product{font-size:12px;margin-top:7px}
 .dashboard-stats .value{font-size:20px;overflow-wrap:anywhere}
+
+.quick-price-page{max-width:920px;margin:0 auto}
+.quick-price-search{margin-bottom:18px}
+.quick-price-input{display:flex;align-items:stretch;gap:8px}
+.quick-price-input input{min-width:0;flex:1;font-size:18px;padding:14px}
+.quick-price-input input:focus{outline:3px solid #1f5eff25;border-color:var(--primary)}
+.quick-price-input button{flex-shrink:0}
+.quick-price-results{background:#fff;border:1px solid var(--line);border-radius:10px;overflow:hidden}
+.quick-price-table{table-layout:fixed}
+.quick-price-table th{position:static;font-size:13px;padding:12px 16px}
+.quick-price-table td{padding:16px;font-size:16px;overflow-wrap:anywhere}
+.quick-price-table th:last-child,.quick-price-table td:last-child{width:190px}
+.quick-price-table td:last-child{font-size:21px;font-weight:700;font-variant-numeric:tabular-nums;white-space:nowrap}
+.quick-price-table tr:last-child td{border-bottom:0}
+@media(max-width:600px){.quick-price-table th,.quick-price-table td{padding:12px 10px}.quick-price-table td{font-size:15px}.quick-price-table th:last-child,.quick-price-table td:last-child{width:140px}.quick-price-table td:last-child{font-size:18px}.quick-price-input input{font-size:16px}}
