@@ -6,7 +6,17 @@
 <meta name="theme-color" content="#172b4d">
 <title>Stok & Satış Yönetimi</title>
 <link rel="stylesheet" href="./css/style.css?v=customer-ledger-20261030">
-</head>
+<style>
+.label-maker-overlay{position:fixed;inset:0;z-index:9999;background:rgba(10,22,34,.7);overflow:auto;padding:24px;box-sizing:border-box}
+.label-maker-panel{max-width:900px;margin:20px auto;background:#fff;color:#18212d;border-radius:12px;padding:22px;box-shadow:0 12px 40px #0004}
+.label-maker-head,.label-maker-footer{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.label-maker-choices{display:flex;flex-direction:column;gap:10px;padding:12px 0}
+.label-maker-choices label{display:flex;align-items:center;gap:8px;cursor:pointer}
+.label-maker-choices input{width:auto}
+.label-maker-panel table input{width:76px}
+.label-maker-panel table{width:100%}
+.label-maker-footer{margin-top:16px}
+</style></head>
 <body>
 
 <section id="authScreen" class="auth-screen">
@@ -114,7 +124,7 @@
 <div class="card">
 <h3>Detaylı Ürün / Stok Raporu</h3><div class="toolbar"><button onclick="printStockReport()">Stok Raporu PDF / Yazdır</button><button class="secondary" onclick="exportStockExcel()">Stok Raporu Excel (.xlsx)</button><div><label>Kategori</label><select id="stockCategory" onchange="renderProducts();renderStockReport()"><option value="">Tümü</option></select></div><div><label>Stok durumu</label><select id="stockFilter" onchange="renderProducts();renderStockReport()"><option value="">Tümü</option><option value="low">Kritik stok</option><option value="zero">Stok yok</option><option value="available">Stokta</option><option value="unknown">Sayım bekliyor</option></select></div></div><div id="stockSummary" class="stock-summary"></div>
 <div class="toolbar"><div style="min-width:260px"><label>Ürün ara</label><input id="productSearch" oninput="renderProducts();renderStockReport()" placeholder="Ürün, kod, kategori..."></div></div>
-<div class="toolbar no-print" style="margin:12px 0"><strong id="selectedProductsCount">0 ürün seçildi</strong><button id="deleteSelectedProductsButton" type="button" class="danger" onclick="deleteSelectedProducts()" disabled>Seçilen ürünleri sil</button><span class="muted">Yalnızca işaretlenen ürünler silinir. Satış geçmişi olan ürünler silinemez.</span></div>
+<div class="toolbar no-print" style="margin:12px 0"><strong id="selectedProductsCount">0 ürün seçildi</strong><button type="button" onclick="openLabelMaker()" style="background:#186b54;color:white">Seçilen Ürünlerden Satış Etiketi Oluştur</button><button id="deleteSelectedProductsButton" type="button" class="danger" onclick="deleteSelectedProducts()" disabled>Seçilen ürünleri sil</button><span class="muted">Yalnızca işaretlenen ürünler silinir. Satış geçmişi olan ürünler silinemez.</span></div>
 <div class="tablewrap"><table><thead><tr><th><input id="selectVisibleProducts" type="checkbox" aria-label="Görüntülenen tüm ürünleri seç" onchange="toggleVisibleProducts(this.checked)"></th><th>Ürün</th><th>Stok Kodu</th><th>Alış / Adet</th><th>Alış / Koli</th><th>Toptan / Adet</th><th>Perakende / Adet</th><th>Koli İçeriği</th><th>Stok</th><th>Maliyet</th><th></th></tr></thead><tbody id="productRows"></tbody></table></div>
 </div>
 </section>
@@ -240,11 +250,23 @@
 
 </div>
 
+<div id="labelMaker" class="label-maker-overlay no-print" style="display:none" role="dialog" aria-modal="true" aria-labelledby="labelMakerTitle">
+ <div class="label-maker-panel">
+  <div class="label-maker-head"><h2 id="labelMakerTitle">Satış Etiketi Oluştur</h2><button type="button" class="secondary" onclick="closeLabelMaker()">Kapat</button></div>
+  <p class="muted">İşaretlediğiniz ürünlerin güncel perakende fiyatları kullanılır. Etiket sayısını ürün bazında belirleyebilirsiniz.</p>
+  <div class="label-maker-choices"><label><input type="radio" name="labelTemplate" value="A" checked onchange="updateLabelMaker()"> A — Yatay şerit (10 × 2,5 cm), ad solda / fiyat sağda, 22 punto</label><label><input type="radio" name="labelTemplate" value="B" onchange="updateLabelMaker()"> B — Dikdörtgen (7 × 5 cm), ad 26 punto / fiyat 42 punto</label></div>
+  <div id="labelMakerItems"></div>
+  <div class="label-maker-footer"><span id="labelMakerSummary"></span><button type="button" onclick="downloadLabelsDocx()">Word (.docx) indir</button><button type="button" onclick="printLabelsPdf()">PDF / Yazdır</button></div>
+  <div class="muted" style="font-size:12px;margin-top:8px">PDF için yazdırma penceresinde “PDF olarak kaydet”, A4, %100 ölçek ve kenar boşluğu “Yok” seçin. Tarayıcının üstbilgi/altbilgilerini kapatın.</div>
+ </div>
+</div>
+
 <script src="./js/xlsx.js"></script>
 <script src="./js/features.js?v=customer-ledger-20261030"></script>
 <script src="./js/base.js?v=customer-ledger-20261030"></script>
 <script src="./js/cash.js?v=customer-ledger-20261030"></script>
 <script src="./js/customers.js?v=customer-ledger-20261030"></script>
+<script src="./js/labels.js?v=labels-20261030"></script>
 <script type="module" src="./js/app.js?v=customer-ledger-20261030"></script>
 </body>
 </html>
