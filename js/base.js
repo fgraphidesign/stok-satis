@@ -12,7 +12,7 @@ function uid(){return Date.now().toString(36)+Math.random().toString(36).slice(2
 function product(id){return db.products.find(x=>x.id===id)}
 function stockText(p){if(p.stock===null)return 'Sayım bekliyor';let q=Math.max(0,Number(p.stock)||0), c=Number(p.caseQty)||1; return `${Math.floor(q/c)} koli + ${q%c} adet (${q} adet)`}
 
-document.querySelectorAll('#nav button').forEach(b=>b.onclick=()=>{document.querySelectorAll('#nav button').forEach(x=>x.classList.remove('active'));b.classList.add('active');document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));$(b.dataset.tab).classList.add('active'); if(b.dataset.tab==='reports')renderReport();});
+document.querySelectorAll('#nav button').forEach(b=>b.onclick=()=>{document.querySelectorAll('#nav button').forEach(x=>x.classList.remove('active'));b.classList.add('active');document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));$(b.dataset.tab).classList.add('active'); if(b.dataset.tab==='reports')renderReport(); if(b.dataset.tab==='quickprices'){renderQuickPrices();$('quickPriceSearch').focus();}});
 
 function newProduct(){editingStock=null;clearImage();['pName','pSku','pCat','pSupplier','pBuy','pBuyCase','pWhole','pRetail','pCaseQty','pStock','pMin','pNote'].forEach(id=>$(id).value='');$('pCaseQty').value=1;$('pStock').value=0;$('pMin').value=0;$('pId').value='';$('productForm').style.display='block';scrollTo(0,0)}
 function cancelProduct(){$('productForm').style.display='none'}
@@ -144,7 +144,15 @@ function renderDashboard(){
 }
 function dataInfo(){$('dataInfo').innerHTML=`Ürün: <b>${db.products.length}</b> | Satış: <b>${db.sales.length}</b> | Gider: <b>${db.expenses.length}</b> | Manuel kasa: <b>${db.cashEntries.length}</b><br><span class="muted">Son yerel kayıt: ${new Date().toLocaleString('tr-TR')}</span>`}
 function esc(v){return String(v??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]))}
-function renderAll(){renderCustomers();fillCustomerSelect();renderCash();renderStockReport();renderProducts();fillProducts();renderSales();renderExpenses();renderReport();renderCashReport();renderDashboard();dataInfo()}
+function renderQuickPrices(){
+ const input=$('quickPriceSearch'),out=$('quickPriceResults'),count=$('quickPriceCount');if(!input||!out)return;
+ const q=input.value.trim().toLocaleLowerCase('tr-TR');
+ const products=[...db.products].filter(p=>!q||`${p.name||''} ${p.sku||''}`.toLocaleLowerCase('tr-TR').includes(q)).sort((a,b)=>(a.name||'').localeCompare(b.name||'','tr'));
+ const shown=products.slice(0,100);
+ count.textContent=products.length?`${products.length} ürün bulundu${products.length>100?' · İlk 100 ürün gösteriliyor':''}`:'Ürün bulunamadı';
+ out.innerHTML=shown.map(p=>`<div style="display:flex;align-items:center;justify-content:space-between;gap:16px;padding:14px 2px;border-bottom:1px solid #e5e7eb"><div style="min-width:0"><strong style="font-size:17px">${esc(p.name||'')}</strong></div><strong style="font-size:21px;white-space:nowrap">${money(p.retail)}</strong></div>`).join('');
+}
+function renderAll(){renderQuickPrices();renderCustomers();fillCustomerSelect();renderCash();renderStockReport();renderProducts();fillProducts();renderSales();renderExpenses();renderReport();renderCashReport();renderDashboard();dataInfo()}
 $('sDate').value=today();$('sf').value=new Date(Date.now()-30*86400000).toISOString().slice(0,10);$('st').value=today();$('rf').value=today().slice(0,8)+'01';$('rt').value=today();
 $('debtDate').value=today();$('reconcileDate').value=today();
 
