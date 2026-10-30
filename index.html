@@ -38,6 +38,7 @@
 <nav class="no-print" id="nav">
 <button data-tab="dashboard" class="active">Özet</button>
 <button data-tab="products">Ürünler / Stok</button>
+<button data-tab="quickprices">Hızlı Fiyat Sorgula</button>
 <button data-tab="sales">Satış Girişi</button>
 <button data-tab="expenses">Giderler</button>
 <button data-tab="customers">Müşteriler / Cari Hesap</button>
@@ -68,6 +69,15 @@
 </div>
 </section>
 
+<section id="quickprices" class="tab">
+<h2>Hızlı Ürün Fiyat Sorgulama</h2>
+<div class="card" style="max-width:850px;margin-bottom:16px">
+<label for="quickPriceSearch">Ürün adı veya kodu</label>
+<input id="quickPriceSearch" type="search" placeholder="Ürün adını yazın…" autocomplete="off" oninput="renderQuickPrices()" style="font-size:18px;padding:14px;width:100%">
+<p class="muted" id="quickPriceCount" aria-live="polite"></p>
+<div id="quickPriceResults"></div>
+</div>
+</section>
 <section id="products" class="tab">
 <div class="report-head"><h2>Ürünler ve Stok</h2><button onclick="newProduct()">+ Yeni Ürün</button></div>
 <div class="card" style="margin-bottom:14px"><h3>Excel ile Ürün Ekleme ve Güncelleme</h3><p class="muted">Bilgisayarınızdan Excel (.xlsx) dosyasını seçin. Önce ürün sayısı ve hatalar gösterilir; stok kodu eşleşen ürünler güncellenir, yeni kodlar eklenir. Mevcut üründe boş stok hücresi stok miktarını değiştirmez.</p>
