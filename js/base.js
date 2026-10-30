@@ -3,7 +3,7 @@ const selectedProductIds=new Set();
 function toggleProductSelection(id,checked){if(checked)selectedProductIds.add(id);else selectedProductIds.delete(id);updateSelectedProductsUI();}
 function toggleVisibleProducts(checked){for(const p of filteredProducts()){if(checked)selectedProductIds.add(p.id);else selectedProductIds.delete(p.id);}renderProducts();}
 function updateSelectedProductsUI(){for(const id of [...selectedProductIds])if(!db.products.some(p=>p.id===id))selectedProductIds.delete(id);const el=$('selectedProductsCount'),btn=$('deleteSelectedProductsButton');if(el)el.textContent=`${selectedProductIds.size} ürün seçildi`;if(btn)btn.disabled=!selectedProductIds.size;const all=$('selectVisibleProducts');if(all){const rows=filteredProducts();all.checked=rows.length>0&&rows.every(p=>selectedProductIds.has(p.id));all.indeterminate=rows.some(p=>selectedProductIds.has(p.id))&&!all.checked;}}
-let db={products:[],sales:[],expenses:[]};
+let db={products:[],sales:[],expenses:[],cashEntries:[],reconciliations:[],customers:[]};
 const $=id=>document.getElementById(id);
 const money=n=>new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY'}).format(Number(n)||0);
 const num=n=>new Intl.NumberFormat('tr-TR').format(Number(n)||0);
@@ -12,18 +12,7 @@ function uid(){return Date.now().toString(36)+Math.random().toString(36).slice(2
 function product(id){return db.products.find(x=>x.id===id)}
 function stockText(p){if(p.stock===null)return 'Sayım bekliyor';let q=Math.max(0,Number(p.stock)||0), c=Number(p.caseQty)||1; return `${Math.floor(q/c)} koli + ${q%c} adet (${q} adet)`}
 
-document.querySelectorAll('#nav button').forEach(b=>b.onclick=()=>{document.querySelectorAll('#nav button').forEach(x=>x.classList.remove('active'));b.classList.add('active');document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));$(b.dataset.tab).classList.add('active'); if(b.dataset.tab==='reports')renderReport();if(b.dataset.tab==='quickPrice'){renderQuickPrices();$('quickPriceSearch').focus();}});
-
-let quickPriceSource=null,quickPriceIndex=[];
-function quickPriceText(value){return String(value??'').toLocaleLowerCase('tr-TR').normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/ı/g,'i').replace(/\s+/g,' ').trim();}
-function renderQuickPrices(){
- const query=quickPriceText($('quickPriceSearch').value),results=$('quickPriceResults');
- if(!query){results.innerHTML='<div class="empty">Fiyatını görmek için ürün arayın.</div>';return;}
- if(quickPriceSource!==db.products){quickPriceSource=db.products;quickPriceIndex=db.products.map(p=>({product:p,text:quickPriceText(p.name)})).sort((a,b)=>a.product.name.localeCompare(b.product.name,'tr'));}
- const terms=query.split(' '),matches=quickPriceIndex.filter(p=>terms.every(term=>p.text.includes(term)));
- results.innerHTML=matches.length?`<table class="quick-price-table"><thead><tr><th scope="col">Ürün adı</th><th scope="col" class="num">Perakende satış fiyatı</th></tr></thead><tbody>${matches.map(({product:p})=>`<tr><td>${esc(p.name)}</td><td class="num">${money(p.retail)}</td></tr>`).join('')}</tbody></table>`:'<div class="empty">Ürün bulunamadı.</div>';
-}
-function clearQuickPriceSearch(){$('quickPriceSearch').value='';renderQuickPrices();$('quickPriceSearch').focus();}
+document.querySelectorAll('#nav button').forEach(b=>b.onclick=()=>{document.querySelectorAll('#nav button').forEach(x=>x.classList.remove('active'));b.classList.add('active');document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));$(b.dataset.tab).classList.add('active'); if(b.dataset.tab==='reports')renderReport();});
 
 function newProduct(){editingStock=null;clearImage();['pName','pSku','pCat','pSupplier','pBuy','pBuyCase','pWhole','pRetail','pCaseQty','pStock','pMin','pNote'].forEach(id=>$(id).value='');$('pCaseQty').value=1;$('pStock').value=0;$('pMin').value=0;$('pId').value='';$('productForm').style.display='block';scrollTo(0,0)}
 function cancelProduct(){$('productForm').style.display='none'}
@@ -110,6 +99,7 @@ function reportData(){
  return {sales,expenses}
 }
 function renderReport(){
+ renderCashReport();renderCustomerReport();
  let {sales,expenses}=reportData(), total=sales.reduce((a,s)=>a+s.total,0), wh=sales.filter(s=>s.type==='wholesale').reduce((a,s)=>a+s.total,0), re=sales.filter(s=>s.type==='retail').reduce((a,s)=>a+s.total,0), profit=sales.reduce((a,s)=>a+s.profit,0), exp=expenses.reduce((a,e)=>a+e.amount,0);
  $('rSales').textContent=money(total);$('rWholesale').textContent=money(wh);$('rRetail').textContent=money(re);$('rProfit').textContent=money(profit);$('rExpense').textContent=money(exp);
  let wp=sales.filter(s=>s.type==='wholesale').reduce((a,s)=>a+s.profit,0),rp=sales.filter(s=>s.type==='retail').reduce((a,s)=>a+s.profit,0);
@@ -152,8 +142,10 @@ function renderDashboard(){
  const critical=products.filter(p=>p.stock!==null&&p.stock<=p.min).slice(0,30);
  $('dashStock').innerHTML=critical.length?critical.map(p=>`<div style="padding:6px 0;border-bottom:1px solid var(--line)">${esc(p.name)} <b style="float:right">${stockText(p)}</b></div>`).join(''):'<div class="empty">Kritik stok yok.</div>';
 }
-function dataInfo(){$('dataInfo').innerHTML=`Ürün: <b>${db.products.length}</b> | Satış: <b>${db.sales.length}</b> | Gider: <b>${db.expenses.length}</b><br><span class="muted">Son yerel kayıt: ${new Date().toLocaleString('tr-TR')}</span>`}
+function dataInfo(){$('dataInfo').innerHTML=`Ürün: <b>${db.products.length}</b> | Satış: <b>${db.sales.length}</b> | Gider: <b>${db.expenses.length}</b> | Manuel kasa: <b>${db.cashEntries.length}</b><br><span class="muted">Son yerel kayıt: ${new Date().toLocaleString('tr-TR')}</span>`}
 function esc(v){return String(v??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]))}
-function renderAll(){renderStockReport();renderProducts();renderQuickPrices();fillProducts();renderSales();renderExpenses();renderReport();renderDashboard();dataInfo()}
+function renderAll(){renderCustomers();fillCustomerSelect();renderCash();renderStockReport();renderProducts();fillProducts();renderSales();renderExpenses();renderReport();renderCashReport();renderDashboard();dataInfo()}
 $('sDate').value=today();$('sf').value=new Date(Date.now()-30*86400000).toISOString().slice(0,10);$('st').value=today();$('rf').value=today().slice(0,8)+'01';$('rt').value=today();
-renderAll();
+$('debtDate').value=today();$('reconcileDate').value=today();
+
+function toggleSaleDebtFields(){const show=$('sPayment').value==='deferred';$('saleCustomerWrap').style.display=show?'block':'none';$('saleDueWrap').style.display=show?'block':'none';}
