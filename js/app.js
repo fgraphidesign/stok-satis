@@ -10,9 +10,9 @@ function withoutId(obj){const {id,...data}=obj;return data;}
 function ensureNumber(id,integer=false,min=0){const value=Number(document.getElementById(id).value);if(!Number.isFinite(value)||value<min||(integer&&!Number.isInteger(value)))throw Error('Miktar ve fiyat alanlarını kontrol edin.');return value;}
 function safeId(id){if(typeof id!=='string'||!/^[A-Za-z0-9_-]{1,128}$/.test(id))throw Error('Kayıt kimliği geçersiz.');return id;}
 function normalizeProduct(p){return {...p,name:p.name||'',sku:p.sku||'',cat:p.cat??p.category??'',supplier:p.supplier||'',note:p.note||'',buy:Number(p.buy??p.buy_price??0),buyCase:Number(p.buyCase??p.buy_case_price??0),whole:Number(p.whole??p.wholesale_price??0),retail:Number(p.retail??p.retail_price??0),caseQty:Number(p.caseQty??p.case_qty??1),stock:(p.stock===null||p.stock_units===null)?null:Number(p.stock??p.stock_units??0),min:Number(p.min??p.min_stock??0),image:validImage(p.image)?p.image:''};}
-function normalizeCustomer(c){return {...c,name:String(c.name||''),phone:String(c.phone||''),email:String(c.email||''),address:String(c.address||''),note:String(c.note||''),active:c.active!==false};}
-function normalizeSale(s){return {...s,date:s.date??s.sale_date??'',productId:s.productId??s.product_id,type:s.type??s.sale_type??'retail',unit:s.unit||'unit',qty:Number(s.qty??s.quantity_units??0),units:Number(s.units??s.quantity_units??0),price:Number(s.price??0),total:Number(s.total??s.total_amount??0),cost:Number(s.cost??s.cost_amount??0),profit:Number(s.profit??s.profit_amount??0),note:s.note||'',customer:s.customer||'',customerId:s.customerId||'',dueDate:s.dueDate||'',paidAmount:Number(s.paidAmount||0),paymentType:['cash','card','iban','deferred'].includes(s.paymentType)?s.paymentType:'unknown'};}
-function normalizeCashEntry(c){return {...c,date:c.date||'',direction:c.direction||'in',method:c.method||'unknown',amount:Number(c.amount||0),note:c.note||'',kind:c.kind||'manual',targetMethod:c.targetMethod||'',saleId:c.saleId||''};}
+function normalizeCustomer(c){return {...c,name:String(c.name||''),phone:String(c.phone||''),email:String(c.email||''),address:String(c.address||''),note:String(c.note||''),active:c.active!==false,advanceBalance:Number(c.advanceBalance||0)};}
+function normalizeSale(s){return {...s,date:s.date??s.sale_date??'',productId:s.productId??s.product_id,type:s.type??s.sale_type??'retail',unit:s.unit||'unit',qty:Number(s.qty??s.quantity_units??0),units:Number(s.units??s.quantity_units??0),price:Number(s.price??0),total:Number(s.total??s.total_amount??0),cost:Number(s.cost??s.cost_amount??0),profit:Number(s.profit??s.profit_amount??0),note:s.note||'',customer:s.customer||'',customerId:s.customerId||'',dueDate:s.dueDate||'',paidAmount:Number(s.paidAmount||0),advanceApplied:Number(s.advanceApplied||0),paymentType:['cash','card','iban','deferred'].includes(s.paymentType)?s.paymentType:'unknown'};}
+function normalizeCashEntry(c){return {...c,date:c.date||'',direction:c.direction||'in',method:c.method||'unknown',amount:Number(c.amount||0),note:c.note||'',kind:c.kind||'manual',targetMethod:c.targetMethod||'',saleId:c.saleId||'',customerId:c.customerId||''};}
 function normalizeReconciliation(r){return {...r,date:r.date||'',method:r.method||'cash',expected:Number(r.expected||0),actual:Number(r.actual||0)};}
 function normalizeExpense(e){return {...e,date:e.date??e.expense_date??'',cat:e.cat??e.category??'',amount:Number(e.amount||0),note:e.note||'',paymentType:['cash','card','iban'].includes(e.paymentType)?e.paymentType:'unknown'};}
 async function saveProduct(){return action(async()=>{
@@ -59,10 +59,44 @@ async function deleteAllProducts(){
  });
 }
 async function saveSale(){return action(async()=>{
- const p=product($('sProduct').value);if(!p)throw Error('Ürün seçin.');const qty=ensureNumber('sQty',true,1),price=ensureNumber('sPrice'),date=$('sDate').value;if(!date)throw Error('Tarih seçin.');const unit=$('sUnit').value,type=$('sType').value,paymentType=$('sPayment').value;if(!['cash','card','iban','deferred'].includes(paymentType))throw Error('Geçerli bir ödeme türü seçin.');const note=$('sNote').value.trim(),customerId=$('sCustomer').value,customerRecord=db.customers.find(c=>c.id===customerId),customer=customerRecord?.name||'',dueDate=paymentType==='deferred' ? $('sDueDate').value : '',saleId=crypto.randomUUID();if(paymentType==='deferred'&&(!customerRecord||!/^\d{4}-\d{2}-\d{2}$/.test(dueDate)))throw Error('Borç satışında müşteri adı ve vade tarihi zorunludur.');
- await api.runTransaction(store,async tx=>{const pr=ref('products',p.id),snap=await tx.get(pr);if(!snap.exists())throw Error('Ürün bulunamadı.');const fresh=normalizeProduct(snap.data()),units=qty*(unit==='case'?fresh.caseQty:1);if(fresh.stock===null)throw Error('Bu ürünün stok miktarı bilinmiyor. Önce stok sayımı girin.');if(units>fresh.stock)throw Error('Yetersiz stok. Mevcut: '+fresh.stock+' adet.');const total=qty*price,cost=units*fresh.buy;tx.update(pr,{stock:fresh.stock-units,saleCount:Number(snap.data().saleCount||0)+1});tx.set(ref('sales',saleId),{date,productId:p.id,productName:fresh.name,type,paymentType,customer,customerId,dueDate,unit,qty,units,price,total,cost,profit:total-cost,note});});$('sQty').value=1;$('sNote').value='';status('Satış kaydedildi, stok güncellendi.');
- });}
-async function deleteSale(id){if(db.cashEntries.some(c=>c.kind==='debt'&&c.saleId===id)){alert('Bu satışın tahsilat kaydı var. Önce tahsilatı silin.');return;}if(!confirm('Satış silinsin ve stok geri eklensin mi?'))return;return action(async()=>{await api.runTransaction(store,async tx=>{const sr=ref('sales',safeId(id)),snap=await tx.get(sr);if(!snap.exists())return;const s=normalizeSale(snap.data()),pr=ref('products',s.productId),ps=await tx.get(pr);if(!ps.exists())throw Error('Ürün bulunamadı; stok iadesi yapılamadı.');if(normalizeProduct(ps.data()).stock===null)throw Error('Stok miktarı bilinmeyen ürüne iade yapılamaz.');tx.update(pr,{stock:normalizeProduct(ps.data()).stock+s.units,saleCount:Math.max(0,Number(ps.data().saleCount||0)-1)});tx.delete(sr);});});}
+ const p=product($('sProduct').value);if(!p)throw Error('Ürün seçin.');
+ const qty=ensureNumber('sQty',true,1),price=ensureNumber('sPrice'),date=$('sDate').value;
+ if(!date)throw Error('Tarih seçin.');
+ const unit=$('sUnit').value,type=$('sType').value,paymentType=$('sPayment').value;
+ if(!['cash','card','iban','deferred'].includes(paymentType))throw Error('Geçerli bir ödeme türü seçin.');
+ const note=$('sNote').value.trim(),customerId=$('sCustomer').value,customerRecord=db.customers.find(c=>c.id===customerId),customer=customerRecord?.name||'',dueDate=paymentType==='deferred'?$('sDueDate').value:'',saleId=crypto.randomUUID();
+ if(paymentType==='deferred'&&!customerRecord)throw Error('Borç satışında kayıtlı müşteri seçilmelidir.');
+ if(dueDate&&!/^\d{4}-\d{2}-\d{2}$/.test(dueDate))throw Error('Vade tarihi geçersiz.');
+ await api.runTransaction(store,async tx=>{
+  const pr=ref('products',p.id),snap=await tx.get(pr);
+  const cr=customerId?ref('customers',safeId(customerId)):null,cs=cr?await tx.get(cr):null;
+  if(!snap.exists())throw Error('Ürün bulunamadı.');
+  if(cr&&!cs.exists())throw Error('Müşteri bulunamadı.');
+  const fresh=normalizeProduct(snap.data()),units=qty*(unit==='case'?fresh.caseQty:1);
+  if(fresh.stock===null)throw Error('Bu ürünün stok miktarı bilinmiyor. Önce stok sayımı girin.');
+  if(units>fresh.stock)throw Error('Yetersiz stok. Mevcut: '+fresh.stock+' adet.');
+  const total=Math.round(qty*price*100)/100,cost=units*fresh.buy;
+  const available=Math.max(0,Math.round(Number(cs?.data().advanceBalance||0)*100));
+  const applied=Math.min(available,Math.round(total*100));
+  tx.update(pr,{stock:fresh.stock-units,saleCount:Number(snap.data().saleCount||0)+1});
+  if(cr&&applied)tx.update(cr,{advanceBalance:(available-applied)/100});
+  tx.set(ref('sales',saleId),{date,productId:p.id,productName:fresh.name,type,paymentType,customer,customerId,dueDate,unit,qty,units,price,total,cost,profit:total-cost,note,advanceApplied:applied/100,paidAmount:paymentType==='deferred'?applied/100:0});
+ });
+ $('sQty').value=1;$('sNote').value='';status('Satış kaydedildi. Varsa müşteri ön ödemesi otomatik kullanıldı.');
+});}
+async function deleteSale(id){if(db.cashEntries.some(c=>c.kind==='debt'&&c.saleId===id)){alert('Bu satışın tahsilat kaydı var. Önce tahsilatı silin.');return;}if(!confirm('Satış silinsin ve stok/ön ödeme geri eklensin mi?'))return;return action(async()=>{
+ await api.runTransaction(store,async tx=>{
+  const sr=ref('sales',safeId(id)),snap=await tx.get(sr);if(!snap.exists())return;
+  const s=normalizeSale(snap.data()),pr=ref('products',s.productId),ps=await tx.get(pr);
+  const cr=s.customerId&&s.advanceApplied?ref('customers',safeId(s.customerId)):null,cs=cr?await tx.get(cr):null;
+  if(!ps.exists())throw Error('Ürün bulunamadı; stok iadesi yapılamadı.');
+  if(cr&&!cs.exists())throw Error('Müşteri bulunamadı; ön ödeme iade edilemedi.');
+  if(normalizeProduct(ps.data()).stock===null)throw Error('Stok miktarı bilinmeyen ürüne iade yapılamaz.');
+  tx.update(pr,{stock:normalizeProduct(ps.data()).stock+s.units,saleCount:Math.max(0,Number(ps.data().saleCount||0)-1)});
+  if(cr)tx.update(cr,{advanceBalance:Math.round((Number(cs.data().advanceBalance||0)+Number(s.advanceApplied||0))*100)/100});
+  tx.delete(sr);
+ });
+});}
 async function saveExpense(){return action(async()=>{const amount=ensureNumber('eAmount');if(amount<=0||!$('eDate').value)throw Error('Tarih ve pozitif tutar girin.');await api.setDoc(ref('expenses',crypto.randomUUID()),{date:$('eDate').value,cat:$('eCat').value.trim(),amount,paymentType:$('ePayment').value,note:$('eNote').value.trim()});cancelExpense();});}
 async function deleteExpense(id){if(confirm('Gider silinsin mi?'))return action(()=>api.deleteDoc(ref('expenses',safeId(id))));}
 function validateBackup(data){
@@ -71,7 +105,7 @@ function validateBackup(data){
  for(const p of result.products){if(!p.name||['buy','buyCase','whole','retail','caseQty','stock','min'].some(k=>(k==='stock'&&p[k]===null?false:!Number.isFinite(p[k])||p[k]<0))||!Number.isInteger(p.caseQty)||p.caseQty<1||(p.stock!==null&&!Number.isInteger(p.stock))||!Number.isInteger(p.min))throw Error('Yedekte geçersiz ürün var.');}
  for(const s of result.sales){if(!result.products.some(p=>p.id===s.productId)||!/^\d{4}-\d{2}-\d{2}$/.test(s.date)||!['wholesale','retail'].includes(s.type)||['qty','units','price','total','cost','profit'].some(k=>!Number.isFinite(s[k]))||s.units<0||s.paidAmount<0||s.paidAmount>s.total)throw Error('Yedekte geçersiz satış var.');}
  for(const e of result.expenses){if(!Number.isFinite(e.amount)||e.amount<0||!/^\d{4}-\d{2}-\d{2}$/.test(e.date))throw Error('Yedekte geçersiz gider var.');}
- for(const c of result.cashEntries){if(!['manual','opening','transfer','fee','settlement','debt'].includes(c.kind)||!['in','out'].includes(c.direction)||!['cash','card','iban','unknown'].includes(c.method)||!Number.isFinite(c.amount)||c.amount<=0||!/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(c.date))throw Error('Yedekte geçersiz kasa kaydı var.');}
+ for(const c of result.cashEntries){if(!['manual','opening','transfer','fee','settlement','debt','advance'].includes(c.kind)||!['in','out'].includes(c.direction)||!['cash','card','iban','unknown'].includes(c.method)||!Number.isFinite(c.amount)||c.amount<=0||!/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(c.date))throw Error('Yedekte geçersiz kasa kaydı var.');}
  for(const r of result.reconciliations){if(!/^\d{4}-\d{2}-\d{2}$/.test(r.date)||!['cash','card','iban'].includes(r.method)||!Number.isFinite(r.actual)||!Number.isFinite(r.expected))throw Error('Yedekte geçersiz mutabakat var.');}
  for(const c of result.customers){if(!c.name.trim())throw Error('Yedekte müşteri adı boş.');}
  for(const s of result.sales){if(s.customerId&&!result.customers.some(c=>c.id===s.customerId))throw Error('Yedekte satışın müşterisi bulunamadı.');}
@@ -222,16 +256,34 @@ async function saveReconciliation(){return action(async()=>{
  status('Mutabakat kaydedildi.');
 });}
 async function saveCashEntry(){return action(async()=>{
- const date=$('cDate').value,kind=$('cKind').value,method=$('cMethod').value,targetMethod=$('cTarget').value,amount=ensureNumber('cAmount'),note=$('cNote').value.trim();
- if(!/^\d{4}-\d{2}-\d{2}$/.test(date)||!['manual','opening','transfer','fee','settlement'].includes(kind)||!['cash','card','iban'].includes(method)||amount<=0||!note)throw Error('Tarih, işlem türü, hesap, pozitif tutar ve açıklama gerekli.');
+ const date=$('cDate').value,kind=$('cKind').value,method=$('cMethod').value,targetMethod=$('cTarget').value,amount=ensureNumber('cAmount'),note=$('cNote').value.trim(),customerId=$('cCustomer').value;
+ if(!/^\d{4}-\d{2}-\d{2}$/.test(date)||!['manual','opening','transfer','fee','settlement','advance'].includes(kind)||!['cash','card','iban'].includes(method)||amount<=0||!note)throw Error('Tarih, işlem türü, hesap, pozitif tutar ve açıklama gerekli.');
  if(['transfer','settlement'].includes(kind)&&(!['cash','card','iban'].includes(targetMethod)||method===targetMethod))throw Error('Transfer için farklı ve geçerli hedef hesap seçin.');
  if(kind==='settlement'&&(method!=='card'||targetMethod!=='iban'))throw Error('POS aktarımı POS bekleyen hesabından banka hesabına yapılmalıdır.');
- const direction=kind==='opening'?'in':kind==='fee'?'out':$('cDirection').value;
+ if(kind==='advance'&&!customerId)throw Error('Ön ödeme için müşteri seçin.');
+ const direction=['opening','advance'].includes(kind)?'in':kind==='fee'?'out':$('cDirection').value;
  if(!['in','out'].includes(direction))throw Error('Geçersiz yön.');
- await api.setDoc(ref('cashEntries',crypto.randomUUID()),{date,direction,method,targetMethod:['transfer','settlement'].includes(kind)?targetMethod:'',amount,note,kind,createdAt:Date.now()});
+ if(kind==='advance'){
+  await api.runTransaction(store,async tx=>{
+   const cr=ref('customers',safeId(customerId)),cs=await tx.get(cr);
+   if(!cs.exists())throw Error('Müşteri bulunamadı.');
+   tx.update(cr,{advanceBalance:Math.round((Number(cs.data().advanceBalance||0)+amount)*100)/100});
+   tx.set(ref('cashEntries',crypto.randomUUID()),{date,direction:'in',method,amount,note,kind,customerId,createdAt:Date.now()});
+  });
+ }else await api.setDoc(ref('cashEntries',crypto.randomUUID()),{date,direction,method,targetMethod:['transfer','settlement'].includes(kind)?targetMethod:'',amount,note,kind,customerId:customerId||'',createdAt:Date.now()});
  $('cAmount').value='';$('cNote').value='';toggleCashForm(false);
 });}
 async function deleteCashEntry(id){const entry=db.cashEntries.find(c=>c.id===id);if(!entry)return;if(!confirm(entry.kind==='debt'?'Tahsilat silinsin ve kalan borç artırılsın mı?':'Kasa hareketi silinsin mi?'))return;return action(async()=>{
+ if(entry.kind==='advance'){
+  await api.runTransaction(store,async tx=>{
+   const er=ref('cashEntries',safeId(id)),es=await tx.get(er);if(!es.exists())return;
+   const cr=ref('customers',safeId(es.data().customerId)),cs=await tx.get(cr);
+   if(!cs.exists())throw Error('Müşteri bulunamadı.');
+   const available=Math.round(Number(cs.data().advanceBalance||0)*100),amount=Math.round(Number(es.data().amount||0)*100);
+   if(amount>available)throw Error('Bu ön ödemenin bir kısmı satışlarda kullanılmış. Önce ilgili satışları iptal edin.');
+   tx.update(cr,{advanceBalance:(available-amount)/100});tx.delete(er);
+  });return;
+ }
  if(entry.kind!=='debt'){await api.deleteDoc(ref('cashEntries',safeId(id)));return;}
  await api.runTransaction(store,async tx=>{
   const cr=ref('cashEntries',safeId(id)),cs=await tx.get(cr);if(!cs.exists())return;
@@ -252,7 +304,7 @@ async function saveCustomer(){return action(async()=>{
  const id=safeId($('cuId').value||crypto.randomUUID()),name=$('cuName').value.trim(),phone=$('cuPhone').value.trim(),email=$('cuEmail').value.trim(),address=$('cuAddress').value.trim(),note=$('cuNote').value.trim(),active=$('cuActive').value==='true';
  if(!name)throw Error('Müşteri adı zorunludur.');
  if(db.customers.some(c=>c.id!==id&&c.name.toLocaleLowerCase('tr-TR')===name.toLocaleLowerCase('tr-TR')))throw Error('Bu isimle bir müşteri zaten kayıtlı.');
- await api.setDoc(ref('customers',id),{name,phone,email,address,note,active,updatedAt:Date.now()});cancelCustomer();status('Müşteri kaydedildi.');
+ await api.runTransaction(store,async tx=>{const cr=ref('customers',id),existing=await tx.get(cr);tx.set(cr,{name,phone,email,address,note,active,updatedAt:Date.now(),advanceBalance:Number(existing.exists()?existing.data().advanceBalance||0:0)});});cancelCustomer();status('Müşteri kaydedildi.');
 });}
 
 Object.assign(window,{linkLegacySale,saveCustomer,saveCashEntry,saveDebtPayment,saveReconciliation,deleteCashEntry,deleteSelectedProducts,updateBulkDeleteButton,deleteAllProducts,previewBulkImport,importProducts,saveProduct,deleteProduct,saveSale,deleteSale,saveExpense,deleteExpense,restore,login,loginGithub,resetPassword,logout});

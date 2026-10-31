@@ -156,4 +156,4 @@ function renderAll(){renderQuickPrices();renderCustomers();fillCustomerSelect();
 $('sDate').value=today();$('sf').value=new Date(Date.now()-30*86400000).toISOString().slice(0,10);$('st').value=today();$('rf').value=today().slice(0,8)+'01';$('rt').value=today();
 $('debtDate').value=today();$('reconcileDate').value=today();
 
-function toggleSaleDebtFields(){const show=$('sPayment').value==='deferred';$('saleCustomerWrap').style.display=show?'block':'none';$('saleDueWrap').style.display=show?'block':'none';}
+function toggleSaleDebtFields(){const show=$('sPayment').value==='deferred';const due=$('saleDueWrap');if(due)due.style.display=show?'block':'none';const input=$('sDueDate');if(input)input.required=false;}
