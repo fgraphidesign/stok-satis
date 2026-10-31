@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="theme-color" content="#172b4d">
 <title>Stok & Satış Yönetimi</title>
-<link rel="stylesheet" href="./css/style.css?v=customer-ledger-20261030">
+<link rel="stylesheet" href="./css/style.css?v=customer-advance-20261030">
 <style>
 .label-maker-overlay{position:fixed;inset:0;z-index:9999;background:rgba(10,22,34,.7);overflow:auto;padding:24px;box-sizing:border-box}
 .label-maker-panel{max-width:900px;margin:20px auto;background:#fff;color:#18212d;border-radius:12px;padding:22px;box-shadow:0 12px 40px #0004}
@@ -137,7 +137,7 @@
 <div class="wide sale-product-picker"><label for="saleProductSearch">Ürün ara ve seç</label><input id="saleProductSearch" type="search" autocomplete="off" placeholder="Ürün adı, stok kodu veya kategori yazın…" oninput="searchSaleProducts()" onkeydown="saleSearchKeydown(event)" aria-controls="saleProductResults" aria-expanded="false"><input type="hidden" id="sProduct"><div id="saleProductResults" class="sale-search-results" role="listbox" hidden></div><div id="saleSelectedProduct" class="sale-selected-product muted">Henüz ürün seçilmedi.</div></div>
 <div><label>Satış türü</label><select id="sType" onchange="syncSalePrice()"><option value="wholesale">Toptan</option><option value="retail">Perakende</option></select></div>
 <div><label for="sPayment">Ödeme türü</label><select id="sPayment" required onchange="toggleSaleDebtFields()"><option value="cash">Nakit</option><option value="card">Kredi Kartı</option><option value="iban">IBAN</option><option value="deferred">İleri Tarihli (Borç)</option></select></div>
-<div class="wide"><label for="sCustomer">Müşteri (borç satışında zorunlu)</label><input id="customerSelectSearch" type="search" placeholder="Müşteri adını arayın…" oninput="fillCustomerSelect()"><select id="sCustomer" onchange="saleCustomerChanged()"><option value="">Müşteri seçilmedi</option></select><small class="muted">Müşteri kaydı oluşturmak için Müşteriler / Cari Hesap bölümünü kullanın.</small><div id="saleCustomerBalance" class="muted"></div></div><div id="saleDueWrap" style="display:none"><label>Vade tarihi</label><input id="sDueDate" type="date"></div><div><label>Satış birimi</label><select id="sUnit" onchange="syncSalePrice()"><option value="unit">Adet</option><option value="case">Koli</option></select></div>
+<div class="wide"><label for="sCustomer">Müşteri (borç satışında zorunlu)</label><input id="customerSelectSearch" type="search" placeholder="Müşteri adını arayın…" oninput="fillCustomerSelect()"><select id="sCustomer" onchange="saleCustomerChanged()"><option value="">Müşteri seçilmedi</option></select><small class="muted">Müşteri kaydı oluşturmak için Müşteriler / Cari Hesap bölümünü kullanın.</small><div id="saleCustomerBalance" class="muted"></div></div><div id="saleDueWrap" style="display:none"><label>Vade tarihi (isteğe bağlı)</label><input id="sDueDate" type="date"></div><div><label>Satış birimi</label><select id="sUnit" onchange="syncSalePrice()"><option value="unit">Adet</option><option value="case">Koli</option></select></div>
 <div><label>Miktar</label><input id="sQty" type="number" min="1" step="1" value="1"></div>
 <div><label>Birim satış fiyatı</label><input id="sPrice" type="number" min="0" step="0.01"></div>
 <div class="wide"><label>Açıklama</label><input id="sNote"></div>
@@ -180,7 +180,7 @@
 </div><input id="cuId" type="hidden"><div class="actions" style="margin-top:12px"><button onclick="saveCustomer()">Müşteriyi Kaydet</button><button class="secondary" onclick="cancelCustomer()">Vazgeç</button></div></div>
 <div class="grid" id="customerTotals"></div>
 <div class="card" style="margin-top:14px"><div class="toolbar"><div style="min-width:260px"><label>Müşteri ara</label><input id="customerSearch" type="search" placeholder="Ad, telefon, e-posta…" oninput="renderCustomers()"></div><div><label>Filtre</label><select id="customerFilter" onchange="renderCustomers()"><option value="">Tümü</option><option value="debt">Borcu olanlar</option><option value="overdue">Vadesi geçenler</option><option value="active">Aktifler</option><option value="inactive">Pasifler</option></select></div><button class="secondary" onclick="exportCustomersCsv()">Müşterileri CSV İndir</button></div>
-<div class="tablewrap"><table><thead><tr><th>Müşteri</th><th>Telefon</th><th>Toplam alışveriş</th><th>Toplam borç satışı</th><th>Tahsilat</th><th>Kalan borç</th><th>Vadesi geçmiş</th><th></th></tr></thead><tbody id="customerRows"></tbody></table></div></div>
+<div class="tablewrap"><table><thead><tr><th>Müşteri</th><th>Telefon</th><th>Toplam alışveriş</th><th>Toplam borç satışı</th><th>Tahsilat</th><th>Kalan borç</th><th>Vadesi geçmiş</th><th>Ön ödeme bakiyesi</th><th></th></tr></thead><tbody id="customerRows"></tbody></table></div></div>
 <div class="card" id="customerDetail" style="display:none;margin-top:14px"><div class="report-head"><h3 id="customerDetailTitle">Cari Hesap Ekstresi</h3><div class="actions"><button class="secondary" onclick="exportCustomerStatementCsv()">Ekstre CSV</button><button class="secondary" onclick="printCustomerStatement()">Ekstre Yazdır / PDF</button></div></div><div id="customerDetailStats"></div><div id="customerLegacyNotice" class="muted"></div><div class="tablewrap"><table><thead><tr><th>Tarih</th><th>İşlem</th><th>Ürün / Açıklama</th><th>Vade</th><th>Borç</th><th>Ödeme</th><th>Kalan</th></tr></thead><tbody id="customerStatementRows"></tbody></table></div></div>
 </section>
 <section id="cash" class="tab">
@@ -189,9 +189,9 @@
 <div class="card" id="cashForm" style="display:none;margin-bottom:14px">
 <h3>Manuel Kasa Hareketi</h3><div class="formgrid">
 <div><label>Tarih</label><input id="cDate" type="date"></div>
-<div><label>İşlem türü</label><select id="cKind" onchange="cashKindChanged()"><option value="manual">Diğer para girişi/çıkışı</option><option value="opening">Açılış bakiyesi</option><option value="transfer">Hesaplar arası transfer</option><option value="fee">POS / banka komisyonu</option><option value="settlement">POS tahsilatını bankaya aktar</option></select></div><div id="cDirectionWrap"><label>Hareket</label><select id="cDirection"><option value="in">Gelen</option><option value="out">Giden</option></select></div>
+<div><label>İşlem türü</label><select id="cKind" onchange="cashKindChanged()"><option value="manual">Diğer para girişi/çıkışı</option><option value="opening">Açılış bakiyesi</option><option value="advance">Müşteri ön ödemesi</option><option value="transfer">Hesaplar arası transfer</option><option value="fee">POS / banka komisyonu</option><option value="settlement">POS tahsilatını bankaya aktar</option></select></div><div id="cDirectionWrap"><label>Hareket</label><select id="cDirection"><option value="in">Gelen</option><option value="out">Giden</option></select></div>
 <div><label>Kaynak hesap / Para türü</label><select id="cMethod"><option value="cash">Nakit</option><option value="card">Kredi Kartı</option><option value="iban">IBAN / Banka</option></select></div>
-<div id="cTargetWrap" style="display:none"><label>Hedef hesap</label><select id="cTarget"><option value="cash">Nakit</option><option value="card">POS bekleyen</option><option value="iban">Banka / IBAN</option></select></div><div><label>Tutar (₺)</label><input id="cAmount" type="number" min="0.01" step="0.01"></div>
+<div id="cCustomerWrap"><label>Müşteri (ön ödemede zorunlu)</label><select id="cCustomer"><option value="">Müşteri seçin</option></select></div><div id="cTargetWrap" style="display:none"><label>Hedef hesap</label><select id="cTarget"><option value="cash">Nakit</option><option value="card">POS bekleyen</option><option value="iban">Banka / IBAN</option></select></div><div><label>Tutar (₺)</label><input id="cAmount" type="number" min="0.01" step="0.01"></div>
 <div class="wide"><label>Açıklama</label><input id="cNote" placeholder="Örn. Açılış bakiyesi, kasaya ek para"></div>
 </div><div class="actions" style="margin-top:12px"><button onclick="saveCashEntry()">Kaydet</button><button class="secondary" onclick="toggleCashForm(false)">Vazgeç</button></div></div>
 <div class="card" style="margin-bottom:14px"><h3>Borç Tahsilatı</h3><div class="formgrid"><div><label>Borçlu satış</label><select id="debtSale"></select></div><div><label>Tahsilat tarihi</label><input id="debtDate" type="date"></div><div><label>Tahsilat yöntemi</label><select id="debtMethod"><option value="cash">Nakit</option><option value="card">Kredi Kartı</option><option value="iban">IBAN / Banka</option></select></div><div><label>Tahsil edilen tutar (₺)</label><input id="debtAmount" type="number" min="0.01" step="0.01"></div></div><div class="actions" style="margin-top:10px"><button onclick="saveDebtPayment()">Tahsilatı Kaydet</button></div><p class="muted">Kısmi ödeme yapılabilir. Borç satışının kendisi tahsilat değildir; yalnızca burada kaydedilen ödeme kasaya girer.</p></div>
@@ -262,11 +262,11 @@
 </div>
 
 <script src="./js/xlsx.js"></script>
-<script src="./js/features.js?v=customer-ledger-20261030"></script>
-<script src="./js/base.js?v=customer-ledger-20261030"></script>
-<script src="./js/cash.js?v=customer-ledger-20261030"></script>
-<script src="./js/customers.js?v=customer-ledger-20261030"></script>
+<script src="./js/features.js?v=customer-advance-20261030"></script>
+<script src="./js/base.js?v=customer-advance-20261030"></script>
+<script src="./js/cash.js?v=customer-advance-20261030"></script>
+<script src="./js/customers.js?v=customer-advance-20261030"></script>
 <script src="./js/labels.js?v=labels-20261030"></script>
-<script type="module" src="./js/app.js?v=customer-ledger-20261030"></script>
+<script type="module" src="./js/app.js?v=customer-advance-20261030"></script>
 </body>
 </html>
