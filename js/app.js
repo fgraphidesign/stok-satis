@@ -18,7 +18,9 @@ function normalizeExpense(e){return {...e,date:e.date??e.expense_date??'',cat:e.
 async function saveProduct(){return action(async()=>{
  if(imageLoading)throw Error('Görselin hazırlanmasını bekleyin.');const id=safeId($('pId').value||crypto.randomUUID()),old=product(id);
  const p={...old,id,name:$('pName').value.trim(),sku:$('pSku').value.trim(),cat:$('pCat').value.trim(),supplier:$('pSupplier').value.trim(),note:$('pNote').value.trim(),buy:ensureNumber('pBuy'),buyCase:ensureNumber('pBuyCase'),whole:ensureNumber('pWhole'),retail:ensureNumber('pRetail'),caseQty:ensureNumber('pCaseQty',true,1),stock:$('pStock').value.trim()===''?null:ensureNumber('pStock',true),min:ensureNumber('pMin',true),image:productImage};
- if(!p.name)throw Error('Ürün adı zorunlu.');if($('pBuyCase').value==='')p.buyCase=p.buy*p.caseQty;
+ if(!p.name)throw Error('Ürün adı zorunlu.');if(!p.sku)throw Error('Stok kodu zorunlu.');if($('pBuyCase').value==='')p.buyCase=p.buy*p.caseQty;
+ const skuSnapshot=await api.getDocsFromServer(api.collection(store,'users',currentUser.uid,'products'));
+ if(skuSnapshot.docs.some(d=>d.id!==id&&String(d.data().sku||'').trim().toLocaleLowerCase('tr-TR')===p.sku.toLocaleLowerCase('tr-TR')))throw Error('Bu stok kodu başka bir üründe kayıtlı: '+p.sku);
  await api.runTransaction(store,async tx=>{const target=ref('products',id),snap=await tx.get(target);if(old&&(!snap.exists()||normalizeProduct(snap.data()).stock!==editingStock))throw Error('Stok başka bir işlemle değişti. Ürünü yeniden açın.');if(!old&&snap.exists())throw Error('Kayıt kimliği çakıştı.');tx.set(target,withoutId(p));});cancelProduct();clearImage();status('Ürün kaydedildi.');
  });}
 async function deleteProduct(id){if(db.sales.some(s=>s.productId===id)){alert('Satış kaydı bulunan ürün silinemez.');return;}if(!confirm('Ürün silinsin mi?'))return;return action(async()=>{await api.runTransaction(store,async tx=>{const target=ref('products',safeId(id)),snap=await tx.get(target);if(!snap.exists())return;if(snap.data().saleCount>0)throw Error('Bu ürünün satış kayıtları var.');tx.delete(target);});});}
@@ -37,7 +39,6 @@ async function deleteAllProducts(){
  if(document.getElementById('bulkDeleteConfirm').value.trim()!=='TÜM ÜRÜNLERİ SİL'){alert('Onay metnini eksiksiz yazın.');return;}
  if(db.sales.length||db.products.some(p=>Number(p.saleCount||0)>0)){alert('Satış geçmişiyle ilişkili ürünler bulunduğu için toplu silme engellendi.');return;}
  const count=db.products.length;
- if(count>450){alert('450 üründen fazlası tek seferde silinemez.');return;}
  if(!confirm(`${count} ürün kalıcı olarak silinecek. Satış ve gider kayıtları korunacak. İşlemi onaylıyor musunuz?`))return;
  return action(async()=>{
   // Silme öncesi sunucudaki güncel satış ve ürün kayıtlarını kontrol et.
@@ -49,9 +50,9 @@ async function deleteAllProducts(){
   if(salesSnapshot.size>0)throw Error('Satış kaydı bulundu. Ürünlerin toplu silinmesi engellendi.');
   if(productsSnapshot.size!==count)throw Error('Ürün sayısı değişti. Sayfayı yenileyip yeniden kontrol edin.');
   for(const doc of productsSnapshot.docs){if(Number(doc.data().saleCount||0)>0)throw Error('Satış geçmişi olan ürün bulundu. Silme engellendi.');}
-  const batch=api.writeBatch(store);
-  for(const doc of productsSnapshot.docs)batch.delete(doc.ref);
-  await batch.commit();
+  for(let i=0;i<productsSnapshot.docs.length;i+=400){
+   const batch=api.writeBatch(store);for(const doc of productsSnapshot.docs.slice(i,i+400))batch.delete(doc.ref);await batch.commit();
+  }
   document.getElementById('bulkDeleteBackup').checked=false;
   document.getElementById('bulkDeleteConfirm').value='';
   status(`${count} ürün silindi. Excel'den yeniden aktarabilirsiniz.`);
@@ -77,13 +78,12 @@ function validateBackup(data){
  for(const s of result.sales){if(s.customerId&&!result.customers.some(c=>c.id===s.customerId))throw Error('Yedekte satışın müşterisi bulunamadı.');}
  for(const p of result.products)p.saleCount=result.sales.filter(s=>s.productId===p.id).length;return result;
 }
-async function restore(){const file=$('restoreFile').files[0];if(!file){alert('JSON yedek dosyası seçin.');return;}return action(async()=>{const restored=validateBackup(JSON.parse(await file.text()));const operations=[];for(const k of ['products','sales','expenses','customers','cashEntries','reconciliations']){const targetIds=new Set(restored[k].map(x=>x.id));for(const row of db[k])if(!targetIds.has(row.id))operations.push(['delete',k,row.id]);for(const row of restored[k])operations.push(['set',k,row.id,withoutId(row)]);}if(operations.length>450)throw Error('Yedek tek işlem sınırını aşıyor. Veriler değiştirilmedi.');if(!confirm('Mevcut veriler yedekle değiştirilecek. Güncel yedeğinizi aldıysanız devam edin.'))return;const batch=api.writeBatch(store);for(const [op,k,id,data] of operations)if(op==='delete')batch.delete(ref(k,id));else batch.set(ref(k,id),data);await batch.commit();status('Yedek geri yüklendi.');});}
+async function restore(){const file=$('restoreFile').files[0];if(!file){alert('JSON yedek dosyası seçin.');return;}return action(async()=>{const restored=validateBackup(JSON.parse(await file.text()));const operations=[];for(const k of ['products','sales','expenses','customers','cashEntries','reconciliations']){const targetIds=new Set(restored[k].map(x=>x.id));for(const row of db[k])if(!targetIds.has(row.id))operations.push(['delete',k,row.id]);for(const row of restored[k])operations.push(['set',k,row.id,withoutId(row)]);}if(!confirm('Mevcut veriler yedekle değiştirilecek. Güncel yedeğinizi aldıysanız devam edin.'))return;for(let i=0;i<operations.length;i+=400){const batch=api.writeBatch(store);for(const [op,k,id,data] of operations.slice(i,i+400))if(op==='delete')batch.delete(ref(k,id));else batch.set(ref(k,id),data);await batch.commit();status(`Yedek geri yükleniyor: ${Math.min(i+400,operations.length)}/${operations.length}`);}status('Yedek geri yüklendi.');});}
 async function deleteSelectedProducts(){
  const ids=[...selectedProductIds];
  if(!ids.length){alert('Önce ürün seçin.');return;}
  if(!confirm(`${ids.length} seçili ürün kalıcı olarak silinecek. Diğer ürünler korunacak. Devam edilsin mi?`))return;
  return action(async()=>{
-  if(ids.length>400)throw Error('Tek işlemde en fazla 400 ürün silinebilir. Daha az ürün seçin.');
   const uid=currentUser.uid;
   const [salesSnap,productSnaps]=await Promise.all([
    api.getDocsFromServer(api.collection(store,'users',uid,'sales')),
@@ -94,8 +94,7 @@ async function deleteSelectedProducts(){
    if(!productSnaps[i].exists())throw Error('Ürün listesi değişmiş. Sayfayı yenileyin.');
    if(linked.has(ids[i])||Number(productSnaps[i].data().saleCount||0)>0)throw Error('Seçilen ürünlerden birinin satış geçmişi var. Hiçbir ürün silinmedi.');
   }
-  const batch=api.writeBatch(store);for(const id of ids)batch.delete(ref('products',id));
-  await batch.commit();selectedProductIds.clear();updateSelectedProductsUI();
+  for(let i=0;i<ids.length;i+=400){const batch=api.writeBatch(store);for(const id of ids.slice(i,i+400))batch.delete(ref('products',id));await batch.commit();}selectedProductIds.clear();updateSelectedProductsUI();
   alert(`${ids.length} seçili ürün silindi. Diğer ürünler korundu.`);
  });
 }
@@ -155,7 +154,7 @@ async function previewBulkImport(){
    const buy=parseMoneyCell(get('buy'),'Alış fiyatı',line),retail=parseMoneyCell(get('retail'),'Satış fiyatı',line),whole=indices.whole>=0?parseMoneyCell(get('whole'),'Toptan fiyatı',line):retail;
    result.push({name,sku,cat:String(get('cat')??'').trim(),note:String(get('note')??'').trim(),buy,buyCase:buy*caseQty,whole,retail,caseQty,stock,_provided:provided});
   }
-  if(!result.length||result.length>400)throw Error('Excel dosyasında 1–400 arasında ürün olmalı.');
+  if(!result.length)throw Error('Excel dosyasında ürün bulunamadı.');
   bulkPending=result;
   const matched=result.filter(p=>db.products.some(e=>e.sku===p.sku)).length;$('bulkPreview').textContent=`${result.length} ürün okundu. ${matched} mevcut ürün güncellenecek, ${result.length-matched} yeni ürün eklenecek. ${result.filter(p=>p.stock===null).length} boş stok hücresi mevcut ürünlerin stoklarını değiştirmeyecek. İşlemden önce JSON yedeği alın.`;
   $('bulkImportButton').textContent='Excel değişikliklerini uygula';$('bulkImportButton').disabled=false;
@@ -171,8 +170,7 @@ async function importProducts(){return action(async()=>{
  const updates=bulkPending.filter(p=>bySku.has(p.sku)).length;
  const additions=bulkPending.length-updates;
  if(!confirm(`${updates} ürün güncellenecek, ${additions} yeni ürün eklenecek. Mevcut stok hücresi Excel'de boşsa stok değişmeyecek. Onaylıyor musunuz?`))return;
- if(bulkPending.length>400)throw Error('Tek işlem sınırı 400 ürün.');
- const batch=api.writeBatch(store);
+ const writes=[];
  for(const p of bulkPending){
   const existing=bySku.get(p.sku),v=p._provided;
   if(existing){
@@ -185,14 +183,14 @@ async function importProducts(){return action(async()=>{
    if(v.whole)patch.whole=p.whole;
    if(v.caseQty){patch.caseQty=p.caseQty;if(!v.buy)patch.buyCase=Number(existing.data().buy??0)*p.caseQty;}
    if(v.stock&&p.stock!==null)patch.stock=p.stock;
-   batch.update(existing.ref,patch);
+   writes.push({op:'update',ref:existing.ref,data:patch});
   }else{
    const id=safeId('import_'+p.sku.replace(/[^A-Za-z0-9_-]/g,'_'));
    if(snap.docs.some(d=>d.id===id))throw Error('Ürün kimliği çakışması: '+id);
-   batch.set(ref('products',id),{name:p.name,sku:p.sku,cat:p.cat,supplier:'',note:p.note,buy:p.buy,buyCase:p.buyCase,whole:p.whole,retail:p.retail,caseQty:p.caseQty,stock:p.stock,min:0,image:'',saleCount:0});
+   writes.push({op:'set',ref:ref('products',id),data:{name:p.name,sku:p.sku,cat:p.cat,supplier:'',note:p.note,buy:p.buy,buyCase:p.buyCase,whole:p.whole,retail:p.retail,caseQty:p.caseQty,stock:p.stock,min:0,image:'',saleCount:0}});
   }
  }
- await batch.commit();
+ for(let i=0;i<writes.length;i+=400){const batch=api.writeBatch(store);for(const w of writes.slice(i,i+400))batch[w.op](w.ref,w.data);await batch.commit();$('bulkPreview').textContent=`Aktarılıyor: ${Math.min(i+400,writes.length)}/${writes.length}`;}
  $('bulkPreview').textContent=`${updates} ürün güncellendi, ${additions} ürün eklendi.`;
  bulkPending=null;$('bulkFile').value='';$('bulkImportButton').disabled=true;
  $('bulkImportButton').textContent='Excel dosyası seçin';status('Excel senkronizasyonu tamamlandı.');
@@ -248,6 +246,24 @@ async function linkLegacySale(saleId,customerId){return action(async()=>{
  if(!confirm(`${sale.productName||'Satış'} kaydı ${customer.name} müşterisine bağlansın mı?`))return;
  await api.runTransaction(store,async tx=>{const target=ref('sales',safeId(saleId)),snap=await tx.get(target);if(!snap.exists()||snap.data().customerId)throw Error('Satış başka bir işlemde değiştirilmiş.');tx.update(target,{customerId,customer:customer.name});});
 });}
+async function deleteCustomer(id){
+ const customer=db.customers.find(c=>c.id===id);if(!customer)return;
+ const sales=db.sales.filter(s=>s.customerId===id);
+ const entries=db.cashEntries.filter(e=>e.customerId===id);
+ if(sales.length||entries.length){
+  alert(`Bu müşteriye bağlı ${sales.length} satış ve ${entries.length} kasa kaydı var. Önce bu kayıtları ilgili sayfalardan silin. Müşteri silinmedi.`);return;
+ }
+ if(!confirm(`“${customer.name}” adlı müşteri kalıcı olarak silinsin mi?`))return;
+ return action(async()=>{
+  // Recheck server records before deletion; do not delete linked financial records.
+  const salesSnap=await api.getDocs(api.query(api.collection(store,'users',currentUser.uid,'sales'),api.where('customerId','==',id)));
+  const cashSnap=await api.getDocs(api.query(api.collection(store,'users',currentUser.uid,'cashEntries'),api.where('customerId','==',id)));
+  if(!salesSnap.empty||!cashSnap.empty)throw Error('Müşteriye bağlı satış veya kasa kaydı var. Önce bunları silin.');
+  await api.deleteDoc(ref('customers',safeId(id)));
+  if(selectedCustomerId===id){selectedCustomerId='';$('customerDetail').style.display='none';}
+  status('Müşteri silindi.');
+ });
+}
 async function saveCustomer(){return action(async()=>{
  const id=safeId($('cuId').value||crypto.randomUUID()),name=$('cuName').value.trim(),phone=$('cuPhone').value.trim(),email=$('cuEmail').value.trim(),address=$('cuAddress').value.trim(),note=$('cuNote').value.trim(),active=$('cuActive').value==='true';
  if(!name)throw Error('Müşteri adı zorunludur.');
@@ -255,7 +271,7 @@ async function saveCustomer(){return action(async()=>{
  await api.setDoc(ref('customers',id),{name,phone,email,address,note,active,updatedAt:Date.now()});cancelCustomer();status('Müşteri kaydedildi.');
 });}
 
-Object.assign(window,{linkLegacySale,saveCustomer,saveCashEntry,saveDebtPayment,saveReconciliation,deleteCashEntry,deleteSelectedProducts,updateBulkDeleteButton,deleteAllProducts,previewBulkImport,importProducts,saveProduct,deleteProduct,saveSale,deleteSale,saveExpense,deleteExpense,restore,login,loginGithub,resetPassword,logout});
+Object.assign(window,{linkLegacySale,deleteCustomer,saveCustomer,saveCashEntry,saveDebtPayment,saveReconciliation,deleteCashEntry,deleteSelectedProducts,updateBulkDeleteButton,deleteAllProducts,previewBulkImport,importProducts,saveProduct,deleteProduct,saveSale,deleteSale,saveExpense,deleteExpense,restore,login,loginGithub,resetPassword,logout});
 async function start(){
  if(!firebaseConfig.apiKey||!firebaseConfig.projectId){$('setupBox').style.display='block';return;}
  try{
