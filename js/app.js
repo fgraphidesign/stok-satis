@@ -326,6 +326,24 @@ async function linkLegacySale(saleId,customerId){return action(async()=>{
  if(!confirm(`${sale.productName||'Satış'} kaydı ${customer.name} müşterisine bağlansın mı?`))return;
  await api.runTransaction(store,async tx=>{const target=ref('sales',safeId(saleId)),snap=await tx.get(target);if(!snap.exists()||snap.data().customerId)throw Error('Satış başka bir işlemde değiştirilmiş.');tx.update(target,{customerId,customer:customer.name});});
 });}
+async function deleteCustomer(id){
+ const customer=db.customers.find(c=>c.id===id);if(!customer)return;
+ const sales=db.sales.filter(s=>s.customerId===id);
+ const entries=db.cashEntries.filter(e=>e.customerId===id);
+ if(sales.length||entries.length){
+  alert(`Bu müşteriye bağlı ${sales.length} satış ve ${entries.length} kasa kaydı var. Önce bu kayıtları ilgili sayfalardan silin. Müşteri silinmedi.`);return;
+ }
+ if(!confirm(`“${customer.name}” adlı müşteri kalıcı olarak silinsin mi?`))return;
+ return action(async()=>{
+  // Recheck server records before deletion; do not delete linked financial records.
+  const salesSnap=await api.getDocs(api.query(api.collection(store,'users',currentUser.uid,'sales'),api.where('customerId','==',id)));
+  const cashSnap=await api.getDocs(api.query(api.collection(store,'users',currentUser.uid,'cashEntries'),api.where('customerId','==',id)));
+  if(!salesSnap.empty||!cashSnap.empty)throw Error('Müşteriye bağlı satış veya kasa kaydı var. Önce bunları silin.');
+  await api.deleteDoc(ref('customers',safeId(id)));
+  if(selectedCustomerId===id){selectedCustomerId='';$('customerDetail').style.display='none';}
+  status('Müşteri silindi.');
+ });
+}
 async function saveCustomer(){return action(async()=>{
  const id=safeId($('cuId').value||crypto.randomUUID()),name=$('cuName').value.trim(),phone=$('cuPhone').value.trim(),email=$('cuEmail').value.trim(),address=$('cuAddress').value.trim(),note=$('cuNote').value.trim(),active=$('cuActive').value==='true';
  if(!name)throw Error('Müşteri adı zorunludur.');
@@ -333,7 +351,7 @@ async function saveCustomer(){return action(async()=>{
  await api.runTransaction(store,async tx=>{const cr=ref('customers',id),existing=await tx.get(cr);tx.set(cr,{name,phone,email,address,note,active,updatedAt:Date.now(),advanceBalance:Number(existing.exists()?existing.data().advanceBalance||0:0)});});cancelCustomer();status('Müşteri kaydedildi.');
 });}
 
-Object.assign(window,{linkLegacySale,saveCustomer,saveCashEntry,saveDebtPayment,saveReconciliation,deleteCashEntry,deleteSelectedProducts,updateBulkDeleteButton,deleteAllProducts,previewBulkImport,importProducts,saveProduct,deleteProduct,saveSale,deleteSale,saveExpense,deleteExpense,restore,login,loginGithub,resetPassword,logout});
+Object.assign(window,{deleteCustomer,linkLegacySale,saveCustomer,saveCashEntry,saveDebtPayment,saveReconciliation,deleteCashEntry,deleteSelectedProducts,updateBulkDeleteButton,deleteAllProducts,previewBulkImport,importProducts,saveProduct,deleteProduct,saveSale,deleteSale,saveExpense,deleteExpense,restore,login,loginGithub,resetPassword,logout});
 async function start(){
  if(!firebaseConfig.apiKey||!firebaseConfig.projectId){$('setupBox').style.display='block';return;}
  try{
