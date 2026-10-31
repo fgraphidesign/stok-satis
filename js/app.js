@@ -264,12 +264,38 @@ async function saveCashEntry(){return action(async()=>{
  const direction=['opening','advance'].includes(kind)?'in':kind==='fee'?'out':$('cDirection').value;
  if(!['in','out'].includes(direction))throw Error('Geçersiz yön.');
  if(kind==='advance'){
+  // Existing unpaid credit sales are reconciled even when their dates precede the advance.
+  // Fully paid cash/card/bank sales are never retroactively charged against an advance.
+  const debts=db.sales.filter(s=>s.customerId===customerId&&s.paymentType==='deferred'&&Number(s.total)>Number(s.paidAmount||0))
+    .sort((a,b)=>String(a.date).localeCompare(String(b.date))||String(a.id).localeCompare(String(b.id)));
+  if(debts.length>350)throw Error('Bu müşterinin çok fazla açık borç satışı var. İşlemi parçalara ayırmak gerekiyor.');
+  let allocated=0;
   await api.runTransaction(store,async tx=>{
    const cr=ref('customers',safeId(customerId)),cs=await tx.get(cr);
    if(!cs.exists())throw Error('Müşteri bulunamadı.');
-   tx.update(cr,{advanceBalance:Math.round((Number(cs.data().advanceBalance||0)+amount)*100)/100});
+   const saleDocs=[];
+   for(const s of debts){const sr=ref('sales',safeId(s.id));saleDocs.push({sr,snap:await tx.get(sr)});}
+   let remaining=Math.round(amount*100);
+   const updates=[];
+   for(const {sr,snap} of saleDocs){
+    if(!snap.exists())continue;
+    const sale=normalizeSale(snap.data());
+    if(sale.customerId!==customerId||sale.paymentType!=='deferred')continue;
+    const outstanding=Math.max(0,Math.round(Number(sale.total)*100)-Math.round(Number(sale.paidAmount||0)*100));
+    const use=Math.min(remaining,outstanding);
+    if(use>0){updates.push({sr,sale,use});remaining-=use;}
+    if(!remaining)break;
+   }
+   allocated=(Math.round(amount*100)-remaining)/100;
+   for(const {sr,sale,use} of updates)tx.update(sr,{
+    paidAmount:(Math.round(Number(sale.paidAmount||0)*100)+use)/100,
+    advanceApplied:(Math.round(Number(sale.advanceApplied||0)*100)+use)/100
+   });
+   const current=Math.round(Number(cs.data().advanceBalance||0)*100);
+   tx.update(cr,{advanceBalance:(current+remaining)/100});
    tx.set(ref('cashEntries',crypto.randomUUID()),{date,direction:'in',method,amount,note,kind,customerId,createdAt:Date.now()});
   });
+  status(`Ön ödeme kaydedildi. ${allocated.toLocaleString('tr-TR',{minimumFractionDigits:2,maximumFractionDigits:2})} TL eski açık borçlara uygulandı.`);
  }else await api.setDoc(ref('cashEntries',crypto.randomUUID()),{date,direction,method,targetMethod:['transfer','settlement'].includes(kind)?targetMethod:'',amount,note,kind,customerId:customerId||'',createdAt:Date.now()});
  $('cAmount').value='';$('cNote').value='';toggleCashForm(false);
 });}
